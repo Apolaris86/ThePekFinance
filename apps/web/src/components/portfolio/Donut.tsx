@@ -5,8 +5,7 @@ export interface Slice {
   value: number;
 }
 
-// Categorical palette, distinguishable in light and dark themes.
-const COLORS = ["#1a73e8", "#e8710a", "#12b5cb", "#d01884", "#7cb342", "#9334e6", "#f9ab00", "#5f6368"];
+import { SERIES_COLORS as COLORS } from "@/lib/colors";
 
 /** Allocation donut with a legend. Slices beyond 7 are folded into "Other". */
 export function Donut({ slices, format }: { slices: Slice[]; format: (v: number) => string }) {

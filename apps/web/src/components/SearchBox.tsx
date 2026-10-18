@@ -34,7 +34,13 @@ function useDebounced(value: string, ms: number) {
   return v;
 }
 
-export function SearchBox() {
+interface Props {
+  /** when set, picking a result calls this instead of opening the stock page */
+  onSelect?: (item: SearchResult) => void;
+  placeholder?: string;
+}
+
+export function SearchBox({ onSelect, placeholder = "Search for stocks, ETFs & more" }: Props = {}) {
   const router = useRouter();
   const listId = useId();
   const [text, setText] = useState("");
@@ -60,7 +66,8 @@ export function SearchBox() {
     saveRecent(item);
     setOpen(false);
     setText("");
-    router.push(`/quote/${encodeURIComponent(item.symbol)}`);
+    if (onSelect) onSelect(item);
+    else router.push(`/quote/${encodeURIComponent(item.symbol)}`);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -73,7 +80,7 @@ export function SearchBox() {
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (items[active]) go(items[active]);
-      else if (typed) router.push(`/quote/${encodeURIComponent(typed.toUpperCase())}`);
+      else if (typed && !onSelect) router.push(`/quote/${encodeURIComponent(typed.toUpperCase())}`);
     } else if (e.key === "Escape") {
       setOpen(false);
     }
@@ -89,7 +96,7 @@ export function SearchBox() {
         aria-expanded={open && items.length > 0}
         aria-controls={listId}
         aria-label="Search stocks"
-        placeholder="Search for stocks, ETFs & more"
+        placeholder={placeholder}
         value={text}
         onChange={(e) => {
           setText(e.target.value);

@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CHART_RANGES, timezoneOf, type Candle, type ChartRange, type Quote } from "@pek/shared";
-import { formatCompact, formatNumber, formatPercent, formatPrice, formatSigned, timeAgo } from "@/lib/format";
+import { formatCompact, formatNumber, formatPercent, formatPrice, formatSigned } from "@/lib/format";
 import { isLiveEligible, useLiveStatus } from "@/lib/live";
-import { useHistory, useNews, useProfile, useQuote } from "@/lib/queries";
+import { api, useHistory, useNews, useProfile, useQuote } from "@/lib/queries";
+import { AiCard } from "@/components/AiCard";
+import { NewsList } from "@/components/NewsList";
 import { PriceChart } from "./PriceChart";
 import { StockActions } from "./StockActions";
 
@@ -37,6 +39,14 @@ export function StockView({ symbol }: { symbol: string }) {
       <div className="min-w-0">
         <PriceHeader quote={q} />
         <ChartSection quote={q} />
+        <div className="mt-8">
+          <AiCard
+            title="AI summary"
+            cta={`Summarize today for ${q.symbol}`}
+            queryKey={["ai", "summary", q.symbol]}
+            fetcher={() => api.stockSummary(q.symbol)}
+          />
+        </div>
         <NewsSection symbol={symbol} />
       </div>
       <aside className="space-y-8">
@@ -98,8 +108,14 @@ function PriceHeader({ quote: q }: { quote: Quote }) {
           q.delayed && <span className="ml-2 rounded border border-border px-1.5 py-0.5">Delayed</span>
         )}
       </p>
-      <div className="mt-4">
+      <div className="mt-4 flex flex-wrap gap-2">
         <StockActions quote={q} />
+        <Link
+          href={`/compare?s=${encodeURIComponent(q.symbol)}`}
+          className="rounded-full border border-border px-4 py-1.5 text-sm font-medium transition hover:bg-surface"
+        >
+          Compare
+        </Link>
       </div>
     </header>
   );
@@ -232,38 +248,11 @@ function About({ symbol }: { symbol: string }) {
 }
 
 function NewsSection({ symbol }: { symbol: string }) {
-  const { data: news, isPending, isError } = useNews(symbol);
+  const { data: news, isPending } = useNews(symbol);
   return (
     <section className="mt-10">
       <h2 className="mb-3 text-lg font-medium">News</h2>
-      {isPending ? (
-        <div className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-20 animate-pulse rounded-xl bg-surface" />
-          ))}
-        </div>
-      ) : isError || !news?.length ? (
-        <p className="text-sm text-muted">No recent news.</p>
-      ) : (
-        <ul className="divide-y divide-border">
-          {news.slice(0, 10).map((n) => (
-            <li key={n.id}>
-              <a href={n.url} target="_blank" rel="noopener noreferrer" className="group flex gap-4 py-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs text-muted">
-                    {n.source} · {timeAgo(n.publishedAt)}
-                  </p>
-                  <p className="mt-1 font-medium leading-snug group-hover:text-accent">{n.headline}</p>
-                </div>
-                {n.image && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={n.image} alt="" loading="lazy" className="h-20 w-20 shrink-0 rounded-lg object-cover" />
-                )}
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
+      <NewsList items={news} loading={isPending} />
     </section>
   );
 }

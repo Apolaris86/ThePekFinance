@@ -17,6 +17,7 @@ import {
   type HoldingValuation,
   type Quote,
 } from "@pek/shared";
+import { AiCard } from "@/components/AiCard";
 import { HoldingForm } from "@/components/HoldingForm";
 import { PriceChart } from "@/components/stock/PriceChart";
 import { useBaseCurrency, useFx, useHoldingMutations, useHoldings, useSetBaseCurrency } from "@/lib/db-queries";
@@ -75,6 +76,13 @@ export function PortfolioView() {
     <div className="space-y-8">
       {header}
       {ready ? <Summary valuations={valuations} base={baseCcy} fx={fx.data!} /> : <div className="h-28 animate-pulse rounded-xl bg-surface" />}
+      <AiCard
+        title="Today's digest"
+        cta="Write today's portfolio digest"
+        // holdings are in the key so adding or editing a lot asks for a fresh digest
+        queryKey={["ai", "digest", lots.map((l) => `${l.id}:${l.shares}:${l.buyPrice}`).join("|")]}
+        fetcher={api.portfolioDigest}
+      />
       {fx.data && <ValueChart lots={lots} base={baseCcy} fx={fx.data} />}
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
         <HoldingsTable valuations={valuations} quotes={quotes} />

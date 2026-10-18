@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@pek/shared": "*",
     "@supabase/supabase-js": "^2.118.0",
     "@tanstack/react-query": "^5.104.4",
@@ -17,7 +18,8 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
-    "yahoo-finance2": "^4.0.4"
+    "yahoo-finance2": "^4.0.4",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",

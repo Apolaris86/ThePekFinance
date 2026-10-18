@@ -3,8 +3,11 @@
 import { createApiClient, exchangeOf, pollInterval, type ChartRange, type Exchange } from "@pek/shared";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useLiveSymbols } from "./live";
+import { getSupabase, supabaseConfigured } from "./supabase";
 
-export const api = createApiClient("");
+export const api = createApiClient("", async () =>
+  supabaseConfigured ? (await getSupabase().auth.getSession()).data.session?.access_token : undefined,
+);
 
 /** refetchInterval for a market: reads the clock only in the browser, never while prerendering. */
 export const marketPoll = (exchange: Exchange, factor = 1) => () =>

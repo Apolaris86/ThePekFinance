@@ -89,3 +89,23 @@ export interface Movers {
   /** most traded by value (or volume, for US) */
   active: Quote[];
 }
+
+export type Sentiment = "positive" | "negative" | "mixed" | "neutral";
+
+/** AI recap of one stock's day. */
+export interface StockSummary {
+  symbol: string;
+  headline: string;
+  points: string[];
+  sentiment: Sentiment;
+  generatedAt: number;
+}
+
+/** AI digest of the signed-in user's portfolio for the day. */
+export interface PortfolioDigest {
+  headline: string;
+  points: string[];
+  /** things worth keeping an eye on, not recommendations */
+  watch: string[];
+  generatedAt: number;
+}

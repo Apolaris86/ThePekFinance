@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Exchange, MarketState, Quote } from "@pek/shared";
+import { NewsList } from "@/components/NewsList";
 import { Sparkline } from "@/components/Sparkline";
 import { useAuth } from "@/lib/auth";
 import { useFx, useWatchlists } from "@/lib/db-queries";
-import { formatNumber, formatPercent, formatPrice, timeAgo } from "@/lib/format";
+import { formatNumber, formatPercent, formatPrice } from "@/lib/format";
 import { useLiveStatus } from "@/lib/live";
 import { api, marketPoll, useHistory, useNews, useQuote } from "@/lib/queries";
 
@@ -224,35 +225,11 @@ function MarketNews() {
   const { data: news, isPending } = useNews();
   return (
     <section>
-      <h2 className="mb-3 text-lg font-medium">Market news</h2>
-      {isPending ? (
-        <div className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-16 animate-pulse rounded-xl bg-surface" />
-          ))}
-        </div>
-      ) : !news?.length ? (
-        <p className="text-sm text-muted">No news right now.</p>
-      ) : (
-        <ul className="divide-y divide-border">
-          {news.slice(0, 8).map((n) => (
-            <li key={n.id}>
-              <a href={n.url} target="_blank" rel="noopener noreferrer" className="group flex gap-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs text-muted">
-                    {n.source} · {timeAgo(n.publishedAt)}
-                  </p>
-                  <p className="mt-1 font-medium leading-snug group-hover:text-accent">{n.headline}</p>
-                </div>
-                {n.image && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={n.image} alt="" loading="lazy" className="h-16 w-16 shrink-0 rounded-lg object-cover" />
-                )}
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-lg font-medium">Market news</h2>
+        <Link href="/news" className="text-sm text-accent hover:underline">More news</Link>
+      </div>
+      <NewsList items={news} loading={isPending} limit={6} empty="No news right now." />
     </section>
   );
 }
