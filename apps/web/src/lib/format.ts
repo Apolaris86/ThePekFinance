@@ -36,3 +36,8 @@ export function timeAgo(ms: number): string {
   if (hours < 24) return `${hours}h ago`;
   return `${Math.round(hours / 24)}d ago`;
 }
+
+/** Money with an explicit sign: +$12.30 / −$4.10 */
+export function formatSignedPrice(value: number, currency: Currency): string {
+  return `${value >= 0 ? "+" : "−"}${formatPrice(Math.abs(value), currency)}`;
+}

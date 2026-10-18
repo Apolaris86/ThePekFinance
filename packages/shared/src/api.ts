@@ -1,4 +1,4 @@
-import type { Candle, ChartRange, CompanyProfile, NewsItem, Quote, SearchResult } from "./types";
+import type { Candle, ChartRange, CompanyProfile, FxRates, NewsItem, Quote, SearchResult } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -21,6 +21,7 @@ export function createApiClient(baseUrl: string) {
     profile: (symbol: string) => get<CompanyProfile | null>(`/api/profile/${enc(symbol)}`),
     news: (symbol?: string) => get<NewsItem[]>(`/api/news${symbol ? `?symbol=${enc(symbol)}` : ""}`),
     search: (q: string) => get<SearchResult[]>(`/api/search?q=${enc(q)}`),
+    fx: () => get<FxRates>("/api/fx"),
   };
 }
 

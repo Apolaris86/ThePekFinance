@@ -60,3 +60,40 @@ describe("symbol helpers", () => {
     expect(isValidSymbol("<script>")).toBe(false);
   });
 });
+
+describe("groupLots", () => {
+  it("averages cost across lots of one symbol", async () => {
+    const { groupLots } = await import("./portfolio");
+    const [p, q] = groupLots([
+      h({ id: "a", shares: 10, buyPrice: 100, buyDate: "2025-03-01" }),
+      h({ id: "b", shares: 30, buyPrice: 200, buyDate: "2025-01-01" }),
+      h({ id: "c", symbol: "MC.PA", currency: "EUR" }),
+    ]);
+    expect(p.shares).toBe(40);
+    expect(p.buyPrice).toBe(175);
+    expect(p.buyDate).toBe("2025-01-01");
+    expect(p.lots).toHaveLength(2);
+    expect(q.symbol).toBe("MC.PA");
+  });
+});
+
+describe("portfolioSeries", () => {
+  it("counts lots from their buy date and carries prices forward", async () => {
+    const { portfolioSeries } = await import("./portfolio");
+    const day = (d: string) => Date.parse(`${d}T00:00:00Z`) / 1000;
+    const series = portfolioSeries(
+      [h({ shares: 2, buyDate: "2025-01-02" }), h({ symbol: "D05.SI", currency: "SGD", shares: 4, buyDate: "2025-01-03" })],
+      {
+        AAPL: [{ time: day("2025-01-01"), close: 90 }, { time: day("2025-01-02"), close: 100 }, { time: day("2025-01-03"), close: 110 }],
+        "D05.SI": [{ time: day("2025-01-03"), close: 40 }],
+      },
+      "USD",
+      fx,
+    );
+    expect(series).toEqual([
+      { time: day("2025-01-02"), value: 200 },
+      // 2 * 110 USD + 4 * 40 SGD (=120 USD)
+      { time: day("2025-01-03"), value: 340 },
+    ]);
+  });
+});

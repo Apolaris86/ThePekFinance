@@ -6,6 +6,7 @@ import { CHART_RANGES, timezoneOf, type Candle, type ChartRange, type Quote } fr
 import { formatCompact, formatNumber, formatPercent, formatPrice, formatSigned, timeAgo } from "@/lib/format";
 import { useHistory, useNews, useProfile, useQuote } from "@/lib/queries";
 import { PriceChart } from "./PriceChart";
+import { StockActions } from "./StockActions";
 
 const EXCHANGE_NAME = { US: "US", SGX: "SGX", EPA: "Euronext Paris" } as const;
 const STATE_LABEL = { PRE: "Pre-market", REGULAR: "Market open", POST: "After hours", CLOSED: "Closed" } as const;
@@ -89,6 +90,9 @@ function PriceHeader({ quote: q }: { quote: Quote }) {
         {asOf} · {q.currency}
         {q.delayed && <span className="ml-2 rounded border border-border px-1.5 py-0.5">Delayed</span>}
       </p>
+      <div className="mt-4">
+        <StockActions quote={q} />
+      </div>
     </header>
   );
 }

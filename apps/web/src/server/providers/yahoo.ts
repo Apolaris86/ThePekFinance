@@ -8,6 +8,7 @@ import {
   type CompanyProfile,
   type Currency,
   type Exchange,
+  type FxRates,
   type MarketDataProvider,
   type MarketState,
   type NewsItem,
@@ -209,3 +210,10 @@ export const yahoo: MarketDataProvider = {
     }
   },
 };
+
+/** Value of 1 unit of each currency in USD, e.g. { USD: 1, SGD: 0.77, EUR: 1.16 }. */
+export async function fxRates(): Promise<FxRates> {
+  const [sgd, eur] = await Promise.all([yf.quote("SGDUSD=X"), yf.quote("EURUSD=X")]);
+  if (!sgd?.regularMarketPrice || !eur?.regularMarketPrice) throw new Error("FX rates unavailable");
+  return { USD: 1, SGD: sgd.regularMarketPrice, EUR: eur.regularMarketPrice };
+}

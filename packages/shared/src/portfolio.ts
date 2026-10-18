@@ -61,3 +61,68 @@ export function summarize(valuations: HoldingValuation[], base: Currency, fx: Fx
     dayChange,
   };
 }
+
+export interface Position extends Holding {
+  /** the individual purchase lots behind this position */
+  lots: Holding[];
+}
+
+/** Merge lots of the same symbol into one position with a share-weighted average cost. */
+export function groupLots(lots: Holding[]): Position[] {
+  const bySymbol = new Map<string, Holding[]>();
+  for (const lot of lots) bySymbol.set(lot.symbol, [...(bySymbol.get(lot.symbol) ?? []), lot]);
+  return [...bySymbol.entries()].map(([symbol, group]) => {
+    const shares = group.reduce((s, l) => s + l.shares, 0);
+    const cost = group.reduce((s, l) => s + l.shares * l.buyPrice, 0);
+    const earliest = group.reduce((d, l) => (l.buyDate < d ? l.buyDate : d), group[0].buyDate);
+    return {
+      id: symbol,
+      symbol,
+      shares,
+      buyPrice: shares === 0 ? 0 : cost / shares,
+      buyDate: earliest,
+      currency: group[0].currency,
+      lots: group,
+    };
+  });
+}
+
+export interface SeriesPoint {
+  time: number;
+  value: number;
+}
+
+/**
+ * Daily portfolio value in the base currency. Each lot counts from its buy date,
+ * valued at the last known close on or before each day. Uses today's FX rates.
+ */
+export function portfolioSeries(
+  lots: Holding[],
+  closes: Record<string, { time: number; close: number }[]>,
+  base: Currency,
+  fx: FxRates,
+): SeriesPoint[] {
+  const times = [...new Set(Object.values(closes).flatMap((c) => c.map((p) => p.time)))].sort((a, b) => a - b);
+  const cursors: Record<string, number> = {};
+  const last: Record<string, number | undefined> = {};
+  const points: SeriesPoint[] = [];
+
+  for (const t of times) {
+    for (const [symbol, series] of Object.entries(closes)) {
+      let i = cursors[symbol] ?? 0;
+      while (i < series.length && series[i].time <= t) last[symbol] = series[i++].close;
+      cursors[symbol] = i;
+    }
+    const day = new Date(t * 1000).toISOString().slice(0, 10);
+    let value = 0;
+    let held = false;
+    for (const lot of lots) {
+      const price = last[lot.symbol];
+      if (lot.buyDate > day || price == null) continue;
+      held = true;
+      value += convert(lot.shares * price, lot.currency, base, fx);
+    }
+    if (held) points.push({ time: t, value });
+  }
+  return points;
+}

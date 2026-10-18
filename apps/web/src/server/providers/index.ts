@@ -4,6 +4,7 @@ import { finnhubEnabled, finnhubNews, finnhubQuote } from "./finnhub";
 import { yahoo } from "./yahoo";
 
 export { NotFoundError } from "./errors";
+export { fxRates } from "./yahoo";
 
 /**
  * Routes each call to the best free source:

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@pek/shared": "*",
+    "@supabase/supabase-js": "^2.118.0",
     "@tanstack/react-query": "^5.104.4",
     "lightweight-charts": "^5.2.1",
     "next": "16.4.2",

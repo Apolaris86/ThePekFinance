@@ -1,7 +1,7 @@
 import "server-only";
 import { cacheLife } from "next/cache";
 import type { ChartRange } from "@pek/shared";
-import { market, NotFoundError } from "./providers";
+import { fxRates, market, NotFoundError } from "./providers";
 
 // Cached wrappers around the provider. Arguments are part of the cache key.
 // Errors lose their class when crossing the cache boundary, so "not found"
@@ -45,4 +45,10 @@ export async function getProfile(symbol: string) {
   "use cache";
   cacheLife("days");
   return market.getProfile(symbol);
+}
+
+export async function getFxRates() {
+  "use cache";
+  cacheLife({ stale: 300, revalidate: 300, expire: 3600 });
+  return fxRates();
 }
