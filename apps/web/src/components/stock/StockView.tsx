@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CHART_RANGES, timezoneOf, type Candle, type ChartRange, type Quote } from "@pek/shared";
 import { formatCompact, formatNumber, formatPercent, formatPrice, formatSigned, timeAgo } from "@/lib/format";
+import { isLiveEligible, useLiveStatus } from "@/lib/live";
 import { useHistory, useNews, useProfile, useQuote } from "@/lib/queries";
 import { PriceChart } from "./PriceChart";
 import { StockActions } from "./StockActions";
@@ -58,6 +59,7 @@ function PriceHeader({ quote: q }: { quote: Quote }) {
     }
   }, [q.price]);
 
+  const live = useLiveStatus() === "live" && isLiveEligible(q.symbol) && q.marketState === "REGULAR";
   const up = q.change >= 0;
   const asOf = new Intl.DateTimeFormat("en-US", {
     timeZone: timezoneOf(q.exchange),
@@ -88,7 +90,13 @@ function PriceHeader({ quote: q }: { quote: Quote }) {
       <p className="mt-2 text-xs text-muted">
         {q.marketState ? `${STATE_LABEL[q.marketState]}: ` : ""}
         {asOf} · {q.currency}
-        {q.delayed && <span className="ml-2 rounded border border-border px-1.5 py-0.5">Delayed</span>}
+        {live ? (
+          <span className="ml-2 inline-flex items-center gap-1 rounded border border-up/40 px-1.5 py-0.5 text-up">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-up" /> Live
+          </span>
+        ) : (
+          q.delayed && <span className="ml-2 rounded border border-border px-1.5 py-0.5">Delayed</span>
+        )}
       </p>
       <div className="mt-4">
         <StockActions quote={q} />

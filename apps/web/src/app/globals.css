@@ -75,3 +75,7 @@ body {
 }
 .flash-up { animation: flash-up 1.2s ease-out; }
 .flash-down { animation: flash-down 1.2s ease-out; }
+
+/* Horizontal strips that scroll by swipe; the cut-off card signals more content. */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

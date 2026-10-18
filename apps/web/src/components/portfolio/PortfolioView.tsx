@@ -5,6 +5,7 @@ import { Fragment, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import {
   convert,
+  exchangeOf,
   groupLots,
   portfolioSeries,
   summarize,
@@ -20,7 +21,8 @@ import { HoldingForm } from "@/components/HoldingForm";
 import { PriceChart } from "@/components/stock/PriceChart";
 import { useBaseCurrency, useFx, useHoldingMutations, useHoldings, useSetBaseCurrency } from "@/lib/db-queries";
 import { formatNumber, formatPercent, formatPrice, formatSignedPrice } from "@/lib/format";
-import { api } from "@/lib/queries";
+import { useLiveSymbols } from "@/lib/live";
+import { api, marketPoll } from "@/lib/queries";
 import { Donut } from "./Donut";
 
 const CURRENCIES: Currency[] = ["USD", "SGD", "EUR"];
@@ -34,8 +36,9 @@ export function PortfolioView() {
 
   const lots = holdings.data ?? [];
   const symbols = [...new Set(lots.map((l) => l.symbol))];
+  useLiveSymbols(symbols);
   const quotes = useQueries({
-    queries: symbols.map((s) => ({ queryKey: ["quote", s], queryFn: () => api.quote(s), refetchInterval: 30_000 })),
+    queries: symbols.map((s) => ({ queryKey: ["quote", s], queryFn: () => api.quote(s), refetchInterval: marketPoll(exchangeOf(s)) })),
     combine: (results) => Object.fromEntries(results.flatMap((r, i) => (r.data ? [[symbols[i], r.data]] : []))) as Record<string, Quote>,
   });
 

@@ -1,7 +1,8 @@
 import "server-only";
 import { cacheLife } from "next/cache";
-import type { ChartRange } from "@pek/shared";
-import { fxRates, market, NotFoundError } from "./providers";
+import type { ChartRange, Exchange, Movers, Quote } from "@pek/shared";
+import { fxRates, market, NotFoundError, yahooQuotes, yahooScreener } from "./providers";
+import { CAC40, STI, US_LARGE_CAPS } from "./universe";
 
 // Cached wrappers around the provider. Arguments are part of the cache key.
 // Errors lose their class when crossing the cache boundary, so "not found"
@@ -51,4 +52,34 @@ export async function getFxRates() {
   "use cache";
   cacheLife({ stale: 300, revalidate: 300, expire: 3600 });
   return fxRates();
+}
+
+export async function getQuotes(symbols: string[]) {
+  "use cache";
+  cacheLife({ stale: 15, revalidate: 15, expire: 60 });
+  return yahooQuotes(symbols);
+}
+
+export async function getMovers(market: Exchange): Promise<Movers> {
+  "use cache";
+  cacheLife({ stale: 60, revalidate: 60, expire: 600 });
+  if (market === "US") {
+    const [gainers, losers, active] = await Promise.all([
+      yahooScreener("day_gainers"),
+      yahooScreener("day_losers"),
+      yahooScreener("most_actives"),
+    ]);
+    if (gainers.length && losers.length) return { gainers, losers, active };
+  }
+  const universe = { US: US_LARGE_CAPS, SGX: STI, EPA: CAC40 }[market];
+  return rankMovers(await yahooQuotes(universe));
+}
+
+function rankMovers(quotes: Quote[]): Movers {
+  const byChange = [...quotes].sort((a, b) => b.changePercent - a.changePercent);
+  return {
+    gainers: byChange.filter((q) => q.changePercent > 0).slice(0, 8),
+    losers: byChange.filter((q) => q.changePercent < 0).reverse().slice(0, 8),
+    active: [...quotes].sort((a, b) => (b.volume ?? 0) * b.price - (a.volume ?? 0) * a.price).slice(0, 8),
+  };
 }

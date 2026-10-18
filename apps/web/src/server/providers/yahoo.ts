@@ -102,6 +102,72 @@ async function searchNews(query: string): Promise<NewsItem[]> {
   return out;
 }
 
+/** The Yahoo quote fields we read; quote() and screener() results both fit. */
+interface YQuote {
+  symbol: string;
+  longName?: string;
+  shortName?: string;
+  currency?: string;
+  regularMarketPrice?: number;
+  regularMarketChange?: number;
+  regularMarketChangePercent?: number;
+  regularMarketPreviousClose?: number;
+  regularMarketOpen?: number;
+  regularMarketDayHigh?: number;
+  regularMarketDayLow?: number;
+  regularMarketVolume?: number;
+  marketCap?: number;
+  trailingPE?: number;
+  fiftyTwoWeekHigh?: number;
+  fiftyTwoWeekLow?: number;
+  trailingAnnualDividendYield?: number;
+  marketState?: string;
+  exchangeDataDelayedBy?: number;
+  regularMarketTime?: Date | number | string;
+}
+
+function toQuote(q: YQuote): Quote {
+  const price = q.regularMarketPrice ?? 0;
+  const exchange = exchangeOf(q.symbol);
+  return {
+    symbol: q.symbol,
+    name: q.longName ?? q.shortName,
+    exchange,
+    currency: asCurrency(q.currency, exchange),
+    price,
+    change: q.regularMarketChange ?? 0,
+    changePercent: q.regularMarketChangePercent ?? 0,
+    previousClose: q.regularMarketPreviousClose ?? price,
+    open: q.regularMarketOpen,
+    dayHigh: q.regularMarketDayHigh,
+    dayLow: q.regularMarketDayLow,
+    volume: q.regularMarketVolume,
+    marketCap: q.marketCap,
+    peRatio: q.trailingPE,
+    fiftyTwoWeekHigh: q.fiftyTwoWeekHigh,
+    fiftyTwoWeekLow: q.fiftyTwoWeekLow,
+    dividendYield: q.trailingAnnualDividendYield,
+    marketState: marketState(q.marketState),
+    delayed: (q.exchangeDataDelayedBy ?? 0) > 0,
+    timestamp: q.regularMarketTime ? new Date(q.regularMarketTime).getTime() : Date.now(),
+  };
+}
+
+/** One request for many symbols; unknown symbols are dropped. */
+export async function yahooQuotes(symbols: string[]): Promise<Quote[]> {
+  if (symbols.length === 0) return [];
+  const res = (await yf.quote(symbols)) as YQuote[];
+  return res.filter((q) => q.regularMarketPrice != null).map(toQuote);
+}
+
+export type MoverList = "day_gainers" | "day_losers" | "most_actives";
+
+/** Yahoo US screeners. */
+export async function yahooScreener(list: MoverList, count = 8): Promise<Quote[]> {
+  const res = await yf.screener({ scrIds: list, count });
+  return (res.quotes as YQuote[]).filter((q) => q.regularMarketPrice != null).map(toQuote);
+}
+
 export const yahoo: MarketDataProvider = {
   async getQuote(symbol) {
     let q;
@@ -111,29 +177,7 @@ export const yahoo: MarketDataProvider = {
       throw new NotFoundError(symbol);
     }
     if (!q || q.regularMarketPrice == null) throw new NotFoundError(symbol);
-    const exchange = exchangeOf(symbol);
-    return {
-      symbol: q.symbol,
-      name: q.longName ?? q.shortName,
-      exchange,
-      currency: asCurrency(q.currency, exchange),
-      price: q.regularMarketPrice,
-      change: q.regularMarketChange ?? 0,
-      changePercent: q.regularMarketChangePercent ?? 0,
-      previousClose: q.regularMarketPreviousClose ?? q.regularMarketPrice,
-      open: q.regularMarketOpen,
-      dayHigh: q.regularMarketDayHigh,
-      dayLow: q.regularMarketDayLow,
-      volume: q.regularMarketVolume,
-      marketCap: q.marketCap,
-      peRatio: "trailingPE" in q ? q.trailingPE : undefined,
-      fiftyTwoWeekHigh: q.fiftyTwoWeekHigh,
-      fiftyTwoWeekLow: q.fiftyTwoWeekLow,
-      dividendYield: "trailingAnnualDividendYield" in q ? q.trailingAnnualDividendYield : undefined,
-      marketState: marketState(q.marketState),
-      delayed: (q.exchangeDataDelayedBy ?? 0) > 0,
-      timestamp: q.regularMarketTime ? new Date(q.regularMarketTime).getTime() : Date.now(),
-    } satisfies Quote;
+    return toQuote(q as YQuote);
   },
 
   async getHistory(symbol, range) {

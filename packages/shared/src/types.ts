@@ -82,3 +82,10 @@ export interface Holding {
 
 /** FX rates expressed as: 1 unit of key currency = rate units of base currency */
 export type FxRates = Record<Currency, number>;
+
+export interface Movers {
+  gainers: Quote[];
+  losers: Quote[];
+  /** most traded by value (or volume, for US) */
+  active: Quote[];
+}

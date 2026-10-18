@@ -1,4 +1,4 @@
-import type { Candle, ChartRange, CompanyProfile, FxRates, NewsItem, Quote, SearchResult } from "./types";
+import type { Candle, ChartRange, CompanyProfile, Exchange, FxRates, Movers, NewsItem, Quote, SearchResult } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -22,6 +22,8 @@ export function createApiClient(baseUrl: string) {
     news: (symbol?: string) => get<NewsItem[]>(`/api/news${symbol ? `?symbol=${enc(symbol)}` : ""}`),
     search: (q: string) => get<SearchResult[]>(`/api/search?q=${enc(q)}`),
     fx: () => get<FxRates>("/api/fx"),
+    quotes: (symbols: string[]) => get<Quote[]>(`/api/quotes?symbols=${symbols.map(enc).join(",")}`),
+    movers: (market: Exchange) => get<Movers>(`/api/movers?market=${market}`),
   };
 }
 

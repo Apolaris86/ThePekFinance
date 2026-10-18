@@ -1,12 +1,24 @@
 "use client";
 
-import { createApiClient, type ChartRange } from "@pek/shared";
+import { createApiClient, exchangeOf, pollInterval, type ChartRange, type Exchange } from "@pek/shared";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useLiveSymbols } from "./live";
 
 export const api = createApiClient("");
 
-export const useQuote = (symbol: string) =>
-  useQuery({ queryKey: ["quote", symbol], queryFn: () => api.quote(symbol), refetchInterval: 30_000 });
+/** refetchInterval for a market: reads the clock only in the browser, never while prerendering. */
+export const marketPoll = (exchange: Exchange, factor = 1) => () =>
+  typeof window === "undefined" ? false : pollInterval(exchange) * factor;
+
+/** Quote that polls on a market-hours cadence and streams trades for US symbols when signed in. */
+export function useQuote(symbol: string) {
+  useLiveSymbols([symbol]);
+  return useQuery({
+    queryKey: ["quote", symbol],
+    queryFn: () => api.quote(symbol),
+    refetchInterval: marketPoll(exchangeOf(symbol)),
+  });
+}
 
 export const useHistory = (symbol: string, range: ChartRange) =>
   useQuery({
