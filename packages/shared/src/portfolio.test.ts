@@ -48,3 +48,15 @@ describe("symbols", () => {
     expect(currencyOf(exchangeOf("AAPL"))).toBe("USD");
   });
 });
+
+describe("symbol helpers", () => {
+  it("maps indices and validates symbols", async () => {
+    const { exchangeOf, normalizeSymbol, isValidSymbol } = await import("./symbols");
+    expect(exchangeOf("^STI")).toBe("SGX");
+    expect(normalizeSymbol(" mc.pa ")).toBe("MC.PA");
+    expect(normalizeSymbol("%5EGSPC")).toBe("^GSPC");
+    expect(isValidSymbol("BRK-B")).toBe(true);
+    expect(isValidSymbol("D05.SI")).toBe(true);
+    expect(isValidSymbol("<script>")).toBe(false);
+  });
+});
