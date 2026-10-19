@@ -10,3 +10,6 @@ dist
 
 # Generated setup SQL containing secrets
 *.local.sql
+
+.vercel
+.env*
