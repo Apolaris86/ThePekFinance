@@ -14,13 +14,14 @@ import {
   deleteWatchlist,
   getBaseCurrency,
   listHoldings,
+  listPortfolios,
   listWatchlists,
   removeFromWatchlist,
   renameWatchlist,
   reorderWatchlist,
   setBaseCurrency,
   updateHolding,
-  type Currency,
+  type BaseCurrency,
   type NewHolding,
   type WatchlistItem,
 } from "@pek/shared";
@@ -46,6 +47,11 @@ export function useHoldings() {
   return useQuery({ queryKey: [...key, "holdings"], queryFn: () => listHoldings(getSupabase()), enabled: !!userId });
 }
 
+export function usePortfolios() {
+  const { userId, key } = useUserKey();
+  return useQuery({ queryKey: [...key, "portfolios"], queryFn: () => listPortfolios(getSupabase()), enabled: !!userId, staleTime: Infinity });
+}
+
 export function useBaseCurrency() {
   const { userId, key } = useUserKey();
   return useQuery({ queryKey: [...key, "base"], queryFn: () => getBaseCurrency(getSupabase()), enabled: !!userId });
@@ -53,7 +59,7 @@ export function useBaseCurrency() {
 
 export const useFx = () => useQuery({ queryKey: ["fx"], queryFn: api.fx, staleTime: 5 * 60_000 });
 
-type Slice = "watchlists" | "holdings" | "base" | "alerts" | "alertEvents";
+type Slice = "watchlists" | "portfolios" | "holdings" | "base" | "alerts" | "alertEvents";
 
 /** Mutation that refetches the given slices of user data when it settles. */
 function useDbMutation<V>(slice: Slice | Slice[], fn: (vars: V) => Promise<unknown>) {
@@ -90,7 +96,7 @@ export function useHoldingMutations() {
 
 export function useSetBaseCurrency() {
   const { userId } = useUserKey();
-  return useDbMutation("base", (c: Currency) => setBaseCurrency(getSupabase(), userId!, c));
+  return useDbMutation("base", (c: BaseCurrency) => setBaseCurrency(getSupabase(), userId!, c));
 }
 
 export function useAlerts() {

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { currencyOf, exchangeOf, isValidSymbol, normalizeSymbol, type Holding, type NewHolding } from "@pek/shared";
-import { useHoldingMutations } from "@/lib/db-queries";
+import { useHoldingMutations, usePortfolios } from "@/lib/db-queries";
 import { api } from "@/lib/queries";
 
 interface Props {
@@ -13,15 +13,18 @@ interface Props {
   defaultPrice?: number;
   /** existing lot to edit */
   editing?: Holding;
+  /** portfolio to preselect for a new holding (defaults to the first one) */
+  portfolioId?: string;
 }
 
 // Local calendar date as YYYY-MM-DD (en-CA formats that way); toISOString would give the UTC date.
 const today = () => new Date().toLocaleDateString("en-CA");
 
 /** Modal for adding or editing one purchase lot. */
-export function HoldingForm({ open, onClose, symbol, defaultPrice, editing }: Props) {
+export function HoldingForm({ open, onClose, symbol, defaultPrice, editing, portfolioId }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const { add, update } = useHoldingMutations();
+  const portfolios = usePortfolios();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -41,17 +44,19 @@ export function HoldingForm({ open, onClose, symbol, defaultPrice, editing }: Pr
     const shares = Number(f.get("shares"));
     const buyPrice = Number(f.get("buyPrice"));
     const buyDate = String(f.get("buyDate"));
+    const portfolio = String(f.get("portfolioId") ?? "");
     if (!isValidSymbol(sym)) return setError("Enter a valid ticker, e.g. AAPL, D05.SI or MC.PA");
     if (!(shares > 0)) return setError("Shares must be more than 0");
     if (!(buyPrice >= 0)) return setError("Enter the price you paid per share");
     if (buyDate > today()) return setError("Buy date can't be in the future");
+    if (!portfolio) return setError("Choose a portfolio");
 
     setBusy(true);
     setError(null);
     try {
       // Confirms the ticker exists and gives us its trading currency.
       const quote = await api.quote(sym);
-      const holding: NewHolding = { symbol: quote.symbol, shares, buyPrice, buyDate, currency: quote.currency };
+      const holding: NewHolding = { portfolioId: portfolio, symbol: quote.symbol, shares, buyPrice, buyDate, currency: quote.currency };
       if (editing) await update.mutateAsync({ id: editing.id, holding });
       else await add.mutateAsync(holding);
       onClose();
@@ -87,6 +92,22 @@ export function HoldingForm({ open, onClose, symbol, defaultPrice, editing }: Pr
               placeholder="AAPL, D05.SI, MC.PA"
               className={`${input} font-mono uppercase ${sym ? "text-muted" : ""}`}
             />
+          </label>
+          <label className="block text-sm">
+            Portfolio
+            <select
+              name="portfolioId"
+              required
+              defaultValue={editing?.portfolioId ?? portfolioId ?? portfolios.data?.[0]?.id}
+              key={portfolios.data?.length}
+              className={input}
+            >
+              {portfolios.data?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-sm">

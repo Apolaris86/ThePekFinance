@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AlertKind, AlertRule } from "./alerts";
-import type { Currency, Holding } from "./types";
+import { BASE_CURRENCIES, type BaseCurrency, type Currency, type Holding } from "./types";
 
 // Data access for user-owned tables. Row level security scopes every query
 // to the signed-in user, so these never filter by user_id themselves.
@@ -18,7 +18,13 @@ export interface WatchlistItem {
   position: number;
 }
 
+export interface Portfolio {
+  id: string;
+  name: string;
+}
+
 export interface NewHolding {
+  portfolioId: string;
   symbol: string;
   shares: number;
   buyPrice: number;
@@ -33,13 +39,14 @@ function check<T>({ data, error }: { data: T; error: { message: string } | null 
 
 // --- Profile ---------------------------------------------------------------
 
-export async function getBaseCurrency(sb: SupabaseClient): Promise<Currency> {
+export async function getBaseCurrency(sb: SupabaseClient): Promise<BaseCurrency> {
   const { data, error } = await sb.from("profiles").select("base_currency").maybeSingle();
   if (error) throw new Error(error.message);
-  return (data?.base_currency as Currency | undefined) ?? "USD";
+  const c = data?.base_currency as BaseCurrency | undefined;
+  return c && BASE_CURRENCIES.includes(c) ? c : "USD";
 }
 
-export async function setBaseCurrency(sb: SupabaseClient, userId: string, currency: Currency) {
+export async function setBaseCurrency(sb: SupabaseClient, userId: string, currency: BaseCurrency) {
   check(await sb.from("profiles").upsert({ id: userId, base_currency: currency }));
 }
 
@@ -92,10 +99,19 @@ export async function reorderWatchlist(sb: SupabaseClient, items: WatchlistItem[
   );
 }
 
+// --- Portfolios ------------------------------------------------------------
+
+/** Every user has an Investment and a Trading portfolio (created by migration 0004 and at signup). */
+export async function listPortfolios(sb: SupabaseClient): Promise<Portfolio[]> {
+  const rows = check(await sb.from("portfolios").select("id, name").order("position").order("created_at"));
+  return rows.map((r) => ({ id: r.id, name: r.name }));
+}
+
 // --- Holdings --------------------------------------------------------------
 
 interface HoldingRow {
   id: string;
+  portfolio_id: string;
   symbol: string;
   shares: number | string;
   buy_price: number | string;
@@ -105,6 +121,7 @@ interface HoldingRow {
 
 const toHolding = (r: HoldingRow): Holding => ({
   id: r.id,
+  portfolioId: r.portfolio_id,
   symbol: r.symbol,
   shares: Number(r.shares),
   buyPrice: Number(r.buy_price),
@@ -114,7 +131,7 @@ const toHolding = (r: HoldingRow): Holding => ({
 
 export async function listHoldings(sb: SupabaseClient): Promise<Holding[]> {
   const rows = check(
-    await sb.from("holdings").select("id, symbol, shares, buy_price, buy_date, currency").order("buy_date"),
+    await sb.from("holdings").select("id, portfolio_id, symbol, shares, buy_price, buy_date, currency").order("buy_date"),
   );
   return (rows as HoldingRow[]).map(toHolding);
 }
@@ -122,6 +139,7 @@ export async function listHoldings(sb: SupabaseClient): Promise<Holding[]> {
 export async function addHolding(sb: SupabaseClient, h: NewHolding) {
   check(
     await sb.from("holdings").insert({
+      portfolio_id: h.portfolioId,
       symbol: h.symbol,
       shares: h.shares,
       buy_price: h.buyPrice,
@@ -135,7 +153,7 @@ export async function updateHolding(sb: SupabaseClient, id: string, h: NewHoldin
   check(
     await sb
       .from("holdings")
-      .update({ symbol: h.symbol, shares: h.shares, buy_price: h.buyPrice, buy_date: h.buyDate, currency: h.currency })
+      .update({ portfolio_id: h.portfolioId, symbol: h.symbol, shares: h.shares, buy_price: h.buyPrice, buy_date: h.buyDate, currency: h.currency })
       .eq("id", id),
   );
 }

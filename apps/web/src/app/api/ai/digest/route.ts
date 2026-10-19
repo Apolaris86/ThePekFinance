@@ -11,7 +11,9 @@ export async function GET(req: Request) {
   if (auth instanceof Response) return auth;
 
   // Reads go through the user's own Supabase session, so RLS scopes them.
-  const [lots, base] = await Promise.all([listHoldings(auth.supabase), getBaseCurrency(auth.supabase)]);
+  const portfolioId = new URL(req.url).searchParams.get("portfolio");
+  const [allLots, base] = await Promise.all([listHoldings(auth.supabase), getBaseCurrency(auth.supabase)]);
+  const lots = portfolioId ? allLots.filter((l) => l.portfolioId === portfolioId) : allLots;
   if (lots.length === 0) return Response.json({ error: "Add holdings to get a digest" }, { status: 400 });
 
   const positions = groupLots(lots);

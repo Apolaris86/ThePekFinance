@@ -112,7 +112,7 @@ function Actions({ quote }: { quote: Quote }) {
       <View style={{ flex: 1 }}>
         <Button title="🔔 Alert" onPress={() => setSheet('alert')} />
       </View>
-      <HoldingSheet quote={quote} visible={sheet === 'holding'} onClose={() => setSheet(null)} />
+      <HoldingSheet symbol={quote.symbol} currency={quote.currency} defaultPrice={quote.price} visible={sheet === 'holding'} onClose={() => setSheet(null)} />
       <AlertSheet quote={quote} visible={sheet === 'alert'} onClose={() => setSheet(null)} />
     </View>
   );

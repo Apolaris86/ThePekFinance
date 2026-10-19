@@ -34,6 +34,8 @@ export function createApiClient(baseUrl: string, getToken?: () => Promise<string
   return {
     quote: (symbol: string) => get<Quote>(`/api/quote/${enc(symbol)}`),
     history: (symbol: string, range: ChartRange) => get<Candle[]>(`/api/history/${enc(symbol)}?range=${range}`),
+    histories: (symbols: string[], range: ChartRange) =>
+      get<Record<string, Candle[]>>(`/api/histories?symbols=${symbols.map(enc).join(",")}&range=${range}`),
     profile: (symbol: string) => get<CompanyProfile | null>(`/api/profile/${enc(symbol)}`),
     news: (symbol?: string) => get<NewsItem[]>(`/api/news${symbol ? `?symbol=${enc(symbol)}` : ""}`),
     search: (q: string) => get<SearchResult[]>(`/api/search?q=${enc(q)}`),
@@ -41,7 +43,8 @@ export function createApiClient(baseUrl: string, getToken?: () => Promise<string
     quotes: (symbols: string[]) => get<Quote[]>(`/api/quotes?symbols=${symbols.map(enc).join(",")}`),
     movers: (market: Exchange) => get<Movers>(`/api/movers?market=${market}`),
     stockSummary: (symbol: string) => get<StockSummary>(`/api/ai/summary/${enc(symbol)}`, true),
-    portfolioDigest: () => get<PortfolioDigest>("/api/ai/digest", true),
+    portfolioDigest: (portfolioId?: string) =>
+      get<PortfolioDigest>(`/api/ai/digest${portfolioId ? `?portfolio=${enc(portfolioId)}` : ""}`, true),
   };
 }
 

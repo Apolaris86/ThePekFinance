@@ -1,12 +1,12 @@
-import { describeAlert, isTriggered, type AlertKind, type Quote } from '@pek/shared';
+import { describeAlert, isTriggered, type AlertKind, type Currency, type Holding, type Quote } from '@pek/shared';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button, Segmented } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useMutations } from '@/lib/queries';
+import { useMutations, usePortfolios } from '@/lib/queries';
 
 /** Bottom sheet wrapper shared by the holding and alert forms. */
 function Sheet({ visible, onClose, title, children }: { visible: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
@@ -41,13 +41,38 @@ function Field({ label, ...props }: { label: string } & React.ComponentProps<typ
 // Local calendar date as YYYY-MM-DD (en-CA formats that way).
 const today = () => new Date().toLocaleDateString('en-CA');
 
-export function HoldingSheet({ quote, visible, onClose }: { quote: Quote; visible: boolean; onClose: () => void }) {
+/**
+ * Add a purchase (from a stock screen) or edit one (from the portfolio).
+ * Remount with a new `key` when switching between lots so the fields reset.
+ */
+export function HoldingSheet({
+  symbol,
+  currency,
+  defaultPrice,
+  editing,
+  portfolioId,
+  visible,
+  onClose,
+}: {
+  symbol: string;
+  currency: Currency;
+  defaultPrice?: number;
+  /** existing purchase to edit */
+  editing?: Holding;
+  /** portfolio to preselect for a new purchase (defaults to the first one) */
+  portfolioId?: string;
+  visible: boolean;
+  onClose: () => void;
+}) {
   const theme = useTheme();
-  const { addHolding } = useMutations();
-  const [shares, setShares] = useState('');
-  const [price, setPrice] = useState(String(quote.price));
-  const [date, setDate] = useState(today());
+  const portfolios = usePortfolios();
+  const { addHolding, updateHolding, deleteHolding } = useMutations();
+  const [shares, setShares] = useState(editing ? String(editing.shares) : '');
+  const [price, setPrice] = useState(String(editing?.buyPrice ?? defaultPrice ?? ''));
+  const [date, setDate] = useState(editing?.buyDate ?? today());
+  const [portfolio, setPortfolio] = useState(editing?.portfolioId ?? portfolioId);
   const [error, setError] = useState<string | null>(null);
+  const target = portfolio ?? portfolios.data?.[0]?.id;
 
   async function save() {
     const s = Number(shares);
@@ -55,9 +80,12 @@ export function HoldingSheet({ quote, visible, onClose }: { quote: Quote; visibl
     if (!(s > 0)) return setError('Shares must be more than 0');
     if (!(p >= 0)) return setError('Enter the price you paid per share');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > today()) return setError('Use a date like 2026-01-15, not in the future');
+    if (!target) return setError('Choose a portfolio');
+    const holding = { portfolioId: target, symbol, shares: s, buyPrice: p, buyDate: date, currency };
     try {
-      await addHolding.mutateAsync({ symbol: quote.symbol, shares: s, buyPrice: p, buyDate: date, currency: quote.currency });
-      setShares('');
+      if (editing) await updateHolding.mutateAsync({ id: editing.id, holding });
+      else await addHolding.mutateAsync(holding);
+      if (!editing) setShares('');
       setError(null);
       onClose();
     } catch {
@@ -65,15 +93,27 @@ export function HoldingSheet({ quote, visible, onClose }: { quote: Quote; visibl
     }
   }
 
+  function confirmDelete() {
+    if (!editing) return;
+    Alert.alert('Delete this purchase?', `${editing.shares} ${symbol} bought ${editing.buyDate}`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => deleteHolding.mutate(editing.id, { onSuccess: onClose }) },
+    ]);
+  }
+
   return (
-    <Sheet visible={visible} onClose={onClose} title={`Add ${quote.symbol} to portfolio`}>
+    <Sheet visible={visible} onClose={onClose} title={editing ? `Edit ${symbol} purchase` : `Add ${symbol} to portfolio`}>
+      {!!portfolios.data?.length && target && (
+        <Segmented options={portfolios.data.map((p) => ({ id: p.id, label: p.name }))} value={target} onChange={setPortfolio} />
+      )}
       <View style={{ flexDirection: 'row', gap: Spacing.three }}>
-        <Field label="Shares" value={shares} onChangeText={setShares} keyboardType="decimal-pad" placeholder="10" autoFocus />
-        <Field label={`Price paid (${quote.currency})`} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
+        <Field label="Shares" value={shares} onChangeText={setShares} keyboardType="decimal-pad" placeholder="10" autoFocus={!editing} />
+        <Field label={`Price paid (${currency})`} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
       </View>
       <Field label="Buy date (YYYY-MM-DD)" value={date} onChangeText={setDate} autoCapitalize="none" />
       {error && <ThemedText type="small" style={{ color: theme.down }}>{error}</ThemedText>}
-      <Button title="Save" variant="primary" onPress={save} loading={addHolding.isPending} />
+      <Button title="Save" variant="primary" onPress={save} loading={addHolding.isPending || updateHolding.isPending} />
+      {editing && <Button title="Delete purchase" variant="ghost" onPress={confirmDelete} loading={deleteHolding.isPending} />}
     </Sheet>
   );
 }

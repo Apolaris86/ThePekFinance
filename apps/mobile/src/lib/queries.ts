@@ -9,17 +9,26 @@ import {
   getBaseCurrency,
   listAlertEvents,
   listAlerts,
+  historyRangeFor,
   listHoldings,
+  listPortfolios,
   listWatchlists,
+  lotsPeriodChange,
+  periodBaseline,
   pollInterval,
   removeFromWatchlist,
   setAlertActive,
   setBaseCurrency,
+  updateHolding,
   type AlertRule,
+  type BaseCurrency,
   type ChartRange,
-  type Currency,
   type Exchange,
+  type GainPeriod,
   type NewHolding,
+  type PeriodChange,
+  type Position,
+  type Quote,
 } from '@pek/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -79,9 +88,38 @@ export const useSearch = (q: string) =>
 
 export const useFx = () => useQuery({ queryKey: ['fx'], queryFn: api.fx, staleTime: 5 * 60_000 });
 
+/** Daily history for a set of symbols in one request; shared by the value chart and the period gains. */
+export function useHistories(symbols: string[], range: ChartRange | null) {
+  const sorted = [...new Set(symbols)].sort();
+  return useQuery({
+    queryKey: ['histories', sorted.join(','), range],
+    queryFn: () => api.histories(sorted, range!),
+    enabled: !!range && sorted.length > 0,
+    placeholderData: keepPreviousData,
+    staleTime: 60 * 60_000,
+  });
+}
+
+/** Each position's change over the period, keyed by symbol. */
+export function usePeriodChanges(positions: Position[], quotes: Record<string, Quote>, period: GainPeriod) {
+  const range = historyRangeFor(period);
+  const histories = useHistories(
+    positions.map((p) => p.symbol),
+    range,
+  );
+  const fresh = !range || (!!histories.data && !histories.isPlaceholderData);
+  const changes: Record<string, PeriodChange> = {};
+  for (const p of positions) {
+    const q = quotes[p.symbol];
+    const baseline = q && fresh ? periodBaseline(period, q, histories.data?.[p.symbol]) : undefined;
+    if (baseline) changes[p.symbol] = lotsPeriodChange(p.lots, q.price, baseline);
+  }
+  return { changes, loading: !fresh };
+}
+
 // --- User data (RLS-scoped via the signed-in Supabase session) --------------
 
-type Slice = 'watchlists' | 'holdings' | 'base' | 'alerts' | 'alertEvents';
+type Slice = 'watchlists' | 'portfolios' | 'holdings' | 'base' | 'alerts' | 'alertEvents';
 
 function useUserKey() {
   const { user } = useAuth();
@@ -103,6 +141,7 @@ function useDbMutation<V>(slices: Slice[], fn: (vars: V) => Promise<unknown>) {
 }
 
 export const useWatchlists = () => useUserQuery('watchlists', () => listWatchlists(getSupabase()));
+export const usePortfolios = () => useUserQuery('portfolios', () => listPortfolios(getSupabase()));
 export const useHoldings = () => useUserQuery('holdings', () => listHoldings(getSupabase()));
 export const useBaseCurrency = () => useUserQuery('base', () => getBaseCurrency(getSupabase()));
 export const useAlerts = () => useUserQuery('alerts', () => listAlerts(getSupabase()));
@@ -117,8 +156,9 @@ export function useMutations() {
     ),
     unfollow: useDbMutation(['watchlists'], (itemId: string) => removeFromWatchlist(sb(), itemId)),
     addHolding: useDbMutation(['holdings'], (h: NewHolding) => addHolding(sb(), h)),
+    updateHolding: useDbMutation(['holdings'], (v: { id: string; holding: NewHolding }) => updateHolding(sb(), v.id, v.holding)),
     deleteHolding: useDbMutation(['holdings'], (id: string) => deleteHolding(sb(), id)),
-    setBase: useDbMutation(['base'], (c: Currency) => setBaseCurrency(sb(), userId!, c)),
+    setBase: useDbMutation(['base'], (c: BaseCurrency) => setBaseCurrency(sb(), userId!, c)),
     createAlert: useDbMutation(['alerts'], (rule: AlertRule) => createAlert(sb(), rule)),
     setAlertActive: useDbMutation(['alerts'], (v: { id: string; active: boolean }) => setAlertActive(sb(), v.id, v.active)),
     deleteAlert: useDbMutation(['alerts', 'alertEvents'], (id: string) => deleteAlert(sb(), id)),

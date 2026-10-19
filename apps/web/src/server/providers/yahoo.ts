@@ -44,7 +44,7 @@ function marketState(raw?: string): MarketState | undefined {
 }
 
 function asCurrency(raw: string | undefined, exchange: Exchange): Currency {
-  return raw === "USD" || raw === "SGD" || raw === "EUR" ? raw : currencyOf(exchange);
+  return raw === "USD" || raw === "SGD" || raw === "EUR" || raw === "AUD" ? raw : currencyOf(exchange);
 }
 
 /** Keep only candles from the last `days` distinct trading dates. */
@@ -75,6 +75,8 @@ function rangeQuery(range: ChartRange): { period1: Date; interval: "5m" | "15m" 
       return { period1: new Date(new Date().getFullYear(), 0, 1), interval: "1d" };
     case "1Y":
       return { period1: new Date(now - 366 * DAY), interval: "1d" };
+    case "2Y":
+      return { period1: new Date(now - 2 * 366 * DAY), interval: "1d" };
     case "5Y":
       return { period1: new Date(now - 5 * 366 * DAY), interval: "1wk" };
     case "MAX":
@@ -255,9 +257,9 @@ export const yahoo: MarketDataProvider = {
   },
 };
 
-/** Value of 1 unit of each currency in USD, e.g. { USD: 1, SGD: 0.77, EUR: 1.16 }. */
+/** Value of 1 unit of each currency in USD, e.g. { USD: 1, SGD: 0.77, EUR: 1.16, AUD: 0.66 }. */
 export async function fxRates(): Promise<FxRates> {
-  const [sgd, eur] = await Promise.all([yf.quote("SGDUSD=X"), yf.quote("EURUSD=X")]);
-  if (!sgd?.regularMarketPrice || !eur?.regularMarketPrice) throw new Error("FX rates unavailable");
-  return { USD: 1, SGD: sgd.regularMarketPrice, EUR: eur.regularMarketPrice };
+  const [sgd, eur, aud] = await Promise.all([yf.quote("SGDUSD=X"), yf.quote("EURUSD=X"), yf.quote("AUDUSD=X")]);
+  if (!sgd?.regularMarketPrice || !eur?.regularMarketPrice || !aud?.regularMarketPrice) throw new Error("FX rates unavailable");
+  return { USD: 1, SGD: sgd.regularMarketPrice, EUR: eur.regularMarketPrice, AUD: aud.regularMarketPrice };
 }

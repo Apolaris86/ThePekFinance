@@ -9,4 +9,4 @@ export interface MarketDataProvider {
   getProfile(symbol: string): Promise<CompanyProfile | null>;
 }
 
-export const CHART_RANGES: ChartRange[] = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "MAX"];
+export const CHART_RANGES: ChartRange[] = ["1D", "5D", "1M", "6M", "YTD", "1Y", "2Y", "5Y", "MAX"];

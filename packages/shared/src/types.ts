@@ -1,4 +1,8 @@
-export type Currency = "USD" | "SGD" | "EUR";
+export type Currency = "USD" | "SGD" | "EUR" | "AUD";
+
+/** Currencies the portfolio totals can be shown in. */
+export type BaseCurrency = "USD" | "AUD";
+export const BASE_CURRENCIES: BaseCurrency[] = ["USD", "AUD"];
 
 export type Exchange = "US" | "SGX" | "EPA";
 
@@ -40,7 +44,7 @@ export interface CompanyProfile {
   description?: string;
 }
 
-export type ChartRange = "1D" | "5D" | "1M" | "6M" | "YTD" | "1Y" | "5Y" | "MAX";
+export type ChartRange = "1D" | "5D" | "1M" | "6M" | "YTD" | "1Y" | "2Y" | "5Y" | "MAX";
 
 export interface Candle {
   time: number;
@@ -73,6 +77,7 @@ export interface SearchResult {
 
 export interface Holding {
   id: string;
+  portfolioId: string;
   symbol: string;
   shares: number;
   buyPrice: number;
