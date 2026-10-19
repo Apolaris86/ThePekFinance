@@ -10,7 +10,8 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "deploy:alerts": "supabase functions deploy check-alerts --no-verify-jwt --use-api --project-ref cmsoyvlnhbelgjiilxqn"
+    "deploy:alerts": "supabase functions deploy check-alerts --no-verify-jwt --use-api --project-ref cmsoyvlnhbelgjiilxqn",
+    "update:app": "cd apps/mobile && npx eas-cli@latest update --channel preview --environment preview --platform android --auto"
   },
   "devDependencies": {
     "supabase": "^2.121.0",
