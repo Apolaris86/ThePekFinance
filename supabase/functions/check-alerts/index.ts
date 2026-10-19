@@ -1,6 +1,7 @@
 // check-alerts: run every minute on weekdays by pg_cron (see supabase/cron/schedule-alerts.sql).
 // Fetches quotes for all active alerts, fires the ones whose condition holds,
-// records an alert_event and emails the owner via Resend. Alerts are one-shot.
+// records an alert_event, emails the owner via Resend and pushes to their devices
+// via the Expo push service (tokens in push_tokens). Alerts are one-shot.
 //
 // Deploy with JWT verification off (the caller authenticates with x-cron-secret):
 //   npm run deploy:alerts
@@ -94,19 +95,75 @@ Deno.serve(async (req) => {
     .select("id, user_id");
   if (eventError) return json({ error: eventError.message }, 500);
 
-  // One email per user listing everything that fired this minute.
+  // One email per user listing everything that fired this minute, plus one push per alert per device.
   const byUser = Map.groupBy(fired, (f) => f.alert.user_id);
   let emailed = 0;
+  let pushed = 0;
   for (const [userId, items] of byUser) {
-    if (await sendEmail(sb, userId, items)) {
-      emailed += items.length;
-      const ids = (events ?? []).filter((e) => e.user_id === userId).map((e) => e.id as string);
-      await sb.from("alert_events").update({ emailed: true }).in("id", ids);
-    }
+    const ids = (events ?? []).filter((e) => e.user_id === userId).map((e) => e.id as string);
+    const [mailed, didPush] = await Promise.all([sendEmail(sb, userId, items), sendPush(sb, userId, items)]);
+    if (mailed) emailed += items.length;
+    if (didPush) pushed += items.length;
+    if (mailed || didPush) await sb.from("alert_events").update({ emailed: mailed, pushed: didPush }).in("id", ids);
   }
 
-  return json({ checked: alerts.length, triggered: fired.length, emailed });
+  return json({ checked: alerts.length, triggered: fired.length, emailed, pushed });
 });
+
+const formatNow = (f: Fired) =>
+  `now ${f.price.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${f.currency ?? ""} (${f.changePercent >= 0 ? "+" : ""}${f.changePercent.toFixed(2)}% today)`;
+
+// Sends through https://exp.host/--/api/v2/push/send and deletes tokens Expo reports as
+// DeviceNotRegistered (app uninstalled or notifications revoked). Returns true if any push was accepted.
+// deno-lint-ignore no-explicit-any
+async function sendPush(sb: any, userId: string, items: Fired[]): Promise<boolean> {
+  const { data: rows, error } = await sb.from("push_tokens").select("token").eq("user_id", userId);
+  if (error) {
+    console.error("push_tokens error", error.message);
+    return false;
+  }
+  const tokens = (rows ?? []).map((r: { token: string }) => r.token);
+  if (tokens.length === 0) return false;
+
+  const messages = tokens.flatMap((to: string) =>
+    items.map((f) => ({
+      to,
+      title: describeAlert({ symbol: f.alert.symbol, kind: f.alert.kind, threshold: Number(f.alert.threshold) }, f.currency),
+      body: `${formatNow(f)}. This alert is now paused.`,
+      data: { symbol: f.alert.symbol },
+      sound: "default",
+      priority: "high",
+      channelId: "alerts",
+    })),
+  );
+
+  const headers: Record<string, string> = { "Content-Type": "application/json", Accept: "application/json" };
+  const accessToken = Deno.env.get("EXPO_ACCESS_TOKEN");
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+  let accepted = false;
+  const dead = new Set<string>();
+  // Expo accepts at most 100 messages per request.
+  for (let i = 0; i < messages.length; i += 100) {
+    const batch = messages.slice(i, i + 100);
+    const res = await fetch("https://exp.host/--/api/v2/push/send", { method: "POST", headers, body: JSON.stringify(batch) });
+    if (!res.ok) {
+      console.error("Expo push error", res.status, await res.text());
+      continue;
+    }
+    // Tickets come back in the same order as the messages.
+    const { data: tickets } = (await res.json()) as {
+      data: { status: "ok" | "error"; message?: string; details?: { error?: string } }[];
+    };
+    tickets.forEach((t, j) => {
+      if (t.status === "ok") accepted = true;
+      else if (t.details?.error === "DeviceNotRegistered") dead.add(batch[j].to);
+      else console.error("Expo push ticket error", t.details?.error, t.message);
+    });
+  }
+  if (dead.size > 0) await sb.from("push_tokens").delete().in("token", [...dead]);
+  return accepted;
+}
 
 // deno-lint-ignore no-explicit-any
 async function sendEmail(sb: any, userId: string, items: Fired[]): Promise<boolean> {
@@ -119,8 +176,7 @@ async function sendEmail(sb: any, userId: string, items: Fired[]): Promise<boole
   const appUrl = Deno.env.get("APP_URL");
   const lines = items.map((f) => {
     const what = describeAlert({ symbol: f.alert.symbol, kind: f.alert.kind, threshold: Number(f.alert.threshold) }, f.currency);
-    const now = `now ${f.price.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${f.currency ?? ""} (${f.changePercent >= 0 ? "+" : ""}${f.changePercent.toFixed(2)}% today)`;
-    return { what, now, symbol: f.alert.symbol };
+    return { what, now: formatNow(f), symbol: f.alert.symbol };
   });
   const subject =
     items.length === 1 ? `Alert: ${lines[0].what}` : `${items.length} price alerts triggered (${lines.map((l) => l.symbol).join(", ")})`;

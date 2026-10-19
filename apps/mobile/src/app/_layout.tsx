@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { AuthProvider } from '@/lib/auth';
+import { listenForNotificationTaps } from '@/lib/push';
 
 export default function RootLayout() {
   const scheme = useColorScheme();
@@ -19,6 +20,8 @@ export default function RootLayout() {
         },
       }),
   );
+
+  useEffect(() => listenForNotificationTaps(), []);
 
   return (
     <QueryClientProvider client={queryClient}>

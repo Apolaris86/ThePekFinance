@@ -2,6 +2,7 @@ import type { User } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, use, useEffect, useState } from 'react';
 
+import { registerForPush, unregisterPush } from './push';
 import { supabase } from './supabase';
 
 interface AuthState {
@@ -28,6 +29,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => data.subscription.unsubscribe();
   }, []);
 
+  // Once signed in (fresh or restored session), make sure this device can receive alert pushes.
+  const userId = user?.id;
+  useEffect(() => {
+    if (userId) registerForPush();
+  }, [userId]);
+
   async function signIn(email: string, password: string) {
     if (!supabase) return 'Supabase is not configured';
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -35,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signOut() {
+    await unregisterPush();
     await supabase?.auth.signOut();
     queryClient.removeQueries({ queryKey: ['db'] });
   }

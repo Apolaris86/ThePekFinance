@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "58725680431",
+    "project_id": "thepekfinance",
+    "storage_bucket": "thepekfinance.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:58725680431:android:3b80af8d66d7c806e3cdda",
+        "android_client_info": {
+          "package_name": "com.pek.thepekfinance"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCR8RuESwxgG08tfiykSdvtQ9b1Q7q97VE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
