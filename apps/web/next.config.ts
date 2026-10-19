@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@pek/shared"],
+  // Dev only: let phones on the home Wi-Fi open the dev site via the PC's LAN address.
+  allowedDevOrigins: ["192.168.*.*"],
   cacheComponents: true,
   partialPrefetching: true,
   // Dev only: lets the Expo web preview (localhost:8081) call this API. Native
