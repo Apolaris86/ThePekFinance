@@ -21,11 +21,11 @@ export default function AlertsScreen() {
       ) : alerts.isPending ? (
         <Skeleton height={160} />
       ) : !alerts.data?.length ? (
-        <Empty text="No alerts yet. Open a stock and tap Alert. You'll get an email when it fires." />
+        <Empty text="No alerts yet. Open a stock and tap Alert. You'll get a notification and an email when it fires." />
       ) : (
         <>
           <ThemedText type="caption" themeColor="textSecondary">
-            Emails go to {user.email}. Checked every minute, Monday to Friday. Alerts fire once, then pause.
+            Notifications go to this phone and emails to {user.email}. Checked every minute, Monday to Friday. Alerts fire once, then pause.
           </ThemedText>
           <RowList>
             {alerts.data.map((a) => (

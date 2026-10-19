@@ -119,7 +119,7 @@ export function AlertSheet({ quote, visible, onClose }: { quote: Quote; visible:
       />
       {n > 0 && <ThemedText type="small">{describeAlert(rule, quote.currency)}</ThemedText>}
       {metNow && <ThemedText type="caption" style={{ color: theme.down }}>Already met, so it fires on the next check.</ThemedText>}
-      <ThemedText type="caption" themeColor="textSecondary">Checked every minute on weekdays. You&apos;ll get an email, then the alert pauses.</ThemedText>
+      <ThemedText type="caption" themeColor="textSecondary">Checked every minute on weekdays. You&apos;ll get a notification and an email, then the alert pauses.</ThemedText>
       {error && <ThemedText type="small" style={{ color: theme.down }}>{error}</ThemedText>}
       <Button title="Create alert" variant="primary" onPress={save} loading={createAlert.isPending} />
     </Sheet>

@@ -6,6 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Screen } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { appVersionLabel } from '@/lib/app-version';
 import { useAuth } from '@/lib/auth';
 import { supabaseConfigured } from '@/lib/supabase';
 
@@ -30,6 +31,7 @@ export default function LoginScreen() {
       <Screen edges={[]}>
         <ThemedText>Signed in as {user.email}</ThemedText>
         <Button title="Sign out" onPress={async () => { await signOut(); router.back(); }} />
+        <ThemedText type="caption" themeColor="textSecondary">{appVersionLabel()}</ThemedText>
       </Screen>
     );
   }

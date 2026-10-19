@@ -55,6 +55,12 @@
         "projectId": "a78e433b-efe3-4eb7-bcbe-fe86bd1e6ceb"
       }
     },
-    "owner": "apolaris86"
+    "owner": "apolaris86",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a78e433b-efe3-4eb7-bcbe-fe86bd1e6ceb"
+    }
   }
 }
