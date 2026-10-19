@@ -2,6 +2,12 @@
 
 import {
   addHolding,
+  createAlert,
+  deleteAlert,
+  listAlertEvents,
+  listAlerts,
+  setAlertActive,
+  type AlertRule,
   addToWatchlist,
   createWatchlist,
   deleteHolding,
@@ -47,13 +53,15 @@ export function useBaseCurrency() {
 
 export const useFx = () => useQuery({ queryKey: ["fx"], queryFn: api.fx, staleTime: 5 * 60_000 });
 
-/** Mutation that refetches one slice of user data when it settles. */
-function useDbMutation<V>(slice: "watchlists" | "holdings" | "base", fn: (vars: V) => Promise<unknown>) {
+type Slice = "watchlists" | "holdings" | "base" | "alerts" | "alertEvents";
+
+/** Mutation that refetches the given slices of user data when it settles. */
+function useDbMutation<V>(slice: Slice | Slice[], fn: (vars: V) => Promise<unknown>) {
   const { key } = useUserKey();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSettled: () => qc.invalidateQueries({ queryKey: [...key, slice] }),
+    onSettled: () => Promise.all([slice].flat().map((s) => qc.invalidateQueries({ queryKey: [...key, s] }))),
   });
 }
 
@@ -83,4 +91,23 @@ export function useHoldingMutations() {
 export function useSetBaseCurrency() {
   const { userId } = useUserKey();
   return useDbMutation("base", (c: Currency) => setBaseCurrency(getSupabase(), userId!, c));
+}
+
+export function useAlerts() {
+  const { userId, key } = useUserKey();
+  return useQuery({ queryKey: [...key, "alerts"], queryFn: () => listAlerts(getSupabase()), enabled: !!userId, refetchInterval: 60_000 });
+}
+
+export function useAlertEvents() {
+  const { userId, key } = useUserKey();
+  return useQuery({ queryKey: [...key, "alertEvents"], queryFn: () => listAlertEvents(getSupabase()), enabled: !!userId, refetchInterval: 60_000 });
+}
+
+export function useAlertMutations() {
+  const sb = getSupabase;
+  return {
+    create: useDbMutation("alerts", (rule: AlertRule) => createAlert(sb(), rule)),
+    setActive: useDbMutation("alerts", (v: { id: string; active: boolean }) => setAlertActive(sb(), v.id, v.active)),
+    remove: useDbMutation(["alerts", "alertEvents"], (id: string) => deleteAlert(sb(), id)),
+  };
 }

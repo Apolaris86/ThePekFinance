@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AlertKind, AlertRule } from "./alerts";
 import type { Currency, Holding } from "./types";
 
 // Data access for user-owned tables. Row level security scopes every query
@@ -141,4 +142,73 @@ export async function updateHolding(sb: SupabaseClient, id: string, h: NewHoldin
 
 export async function deleteHolding(sb: SupabaseClient, id: string) {
   check(await sb.from("holdings").delete().eq("id", id));
+}
+
+// --- Alerts ----------------------------------------------------------------
+
+export interface Alert extends AlertRule {
+  id: string;
+  active: boolean;
+  triggeredAt: string | null;
+  createdAt: string;
+}
+
+export interface AlertEvent {
+  id: string;
+  symbol: string;
+  kind: AlertKind;
+  threshold: number;
+  price: number;
+  changePercent: number | null;
+  currency: string | null;
+  emailed: boolean;
+  triggeredAt: string;
+}
+
+export async function listAlerts(sb: SupabaseClient): Promise<Alert[]> {
+  const rows = check(
+    await sb.from("alerts").select("id, symbol, kind, threshold, active, triggered_at, created_at").order("created_at", { ascending: false }),
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    symbol: r.symbol,
+    kind: r.kind as AlertKind,
+    threshold: Number(r.threshold),
+    active: r.active,
+    triggeredAt: r.triggered_at,
+    createdAt: r.created_at,
+  }));
+}
+
+export async function createAlert(sb: SupabaseClient, rule: AlertRule) {
+  check(await sb.from("alerts").insert({ symbol: rule.symbol, kind: rule.kind, threshold: rule.threshold }));
+}
+
+export async function setAlertActive(sb: SupabaseClient, id: string, active: boolean) {
+  check(await sb.from("alerts").update({ active, ...(active ? { triggered_at: null } : {}) }).eq("id", id));
+}
+
+export async function deleteAlert(sb: SupabaseClient, id: string) {
+  check(await sb.from("alerts").delete().eq("id", id));
+}
+
+export async function listAlertEvents(sb: SupabaseClient, limit = 30): Promise<AlertEvent[]> {
+  const rows = check(
+    await sb
+      .from("alert_events")
+      .select("id, symbol, kind, threshold, price, change_percent, currency, emailed, triggered_at")
+      .order("triggered_at", { ascending: false })
+      .limit(limit),
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    symbol: r.symbol,
+    kind: r.kind as AlertKind,
+    threshold: Number(r.threshold),
+    price: Number(r.price),
+    changePercent: r.change_percent == null ? null : Number(r.change_percent),
+    currency: r.currency,
+    emailed: r.emailed,
+    triggeredAt: r.triggered_at,
+  }));
 }

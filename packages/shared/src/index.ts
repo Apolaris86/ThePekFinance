@@ -5,3 +5,4 @@ export * from "./portfolio";
 export * from "./api";
 export * from "./db";
 export * from "./hours";
+export * from "./alerts";

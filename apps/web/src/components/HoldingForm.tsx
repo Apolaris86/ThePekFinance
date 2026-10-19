@@ -72,7 +72,7 @@ export function HoldingForm({ open, onClose, symbol, defaultPrice, editing }: Pr
       ref={ref}
       onClose={onClose}
       onClick={(e) => e.target === ref.current && onClose()}
-      className="m-auto w-[min(26rem,calc(100vw-2rem))] rounded-2xl border border-border bg-background p-0 text-foreground backdrop:bg-black/50"
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-border bg-background p-0 text-foreground backdrop:bg-black/50"
     >
       {open && (
         <form onSubmit={onSubmit} className="space-y-4 p-6">

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { Quote } from "@pek/shared";
 import { HoldingForm } from "@/components/HoldingForm";
+import { AlertForm } from "@/components/alerts/AlertForm";
 import { useAuth } from "@/lib/auth";
 import { useWatchlistMutations, useWatchlists } from "@/lib/db-queries";
 import { supabaseConfigured } from "@/lib/supabase";
@@ -27,6 +28,7 @@ export function StockActions({ quote }: { quote: Quote }) {
     <div className="flex flex-wrap gap-2">
       <FollowMenu symbol={quote.symbol} />
       <AddHolding quote={quote} />
+      <AddAlert symbol={quote.symbol} />
     </div>
   );
 }
@@ -98,6 +100,18 @@ function AddHolding({ quote }: { quote: Quote }) {
         + Add to portfolio
       </button>
       <HoldingForm open={open} onClose={() => setOpen(false)} symbol={quote.symbol} defaultPrice={quote.price} />
+    </>
+  );
+}
+
+function AddAlert({ symbol }: { symbol: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button onClick={() => setOpen(true)} className={pill} aria-label={`Create a price alert for ${symbol}`}>
+        🔔 Alert
+      </button>
+      <AlertForm open={open} onClose={() => setOpen(false)} symbol={symbol} />
     </>
   );
 }
