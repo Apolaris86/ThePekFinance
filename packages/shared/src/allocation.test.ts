@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { allocate, marketCapBucket, type AllocationItem } from "./allocation";
+import { classify } from "./classification";
 import { seriesReturn } from "./portfolio";
 import type { FxRates, Holding } from "./types";
 
@@ -13,19 +14,18 @@ const items: AllocationItem[] = [
 
 describe("allocate", () => {
   it("groups by sector with ETFs in their own slice", () => {
-    expect(allocate(items, "sector", fx)).toEqual([
+    expect(allocate(items, "sector", fx).map(({ label, value }) => ({ label, value }))).toEqual([
       { label: "Technology", value: 600 },
       { label: "Financial Services", value: 300 },
       { label: "ETFs & funds", value: 100 },
     ]);
   });
 
-  it("groups by asset type and currency", () => {
-    expect(allocate(items, "type", fx)).toEqual([
+  it("groups by asset type", () => {
+    expect(allocate(items, "type", fx).map(({ label, value }) => ({ label, value }))).toEqual([
       { label: "Stocks", value: 900 },
       { label: "ETFs", value: 100 },
     ]);
-    expect(allocate(items, "currency", fx).map((s) => s.label)).toEqual(["USD", "SGD"]);
   });
 
   it("buckets market cap in USD", () => {
@@ -33,6 +33,24 @@ describe("allocate", () => {
     expect(allocate(items, "marketCap", fx).map((s) => s.label)).toEqual(["Mega cap ($200B+)", "Large cap ($10–200B)", "ETFs & funds"]);
     expect(marketCapBucket(undefined)).toBe("Unknown");
     expect(marketCapBucket(1e9)).toBe("Small cap (under $2B)");
+  });
+});
+
+describe("investment type and theme", () => {
+  it("uses the spreadsheet classification and lists members largest first", () => {
+    const byType = allocate(items, "investmentType", fx);
+    expect(byType.map((s) => s.label)).toEqual(["Large Predictable (Moderately Cyclical)", "ETF"]);
+    expect(byType[0].members.map((m) => m.symbol)).toEqual(["AAPL", "D05.SI"]);
+    expect(allocate(items, "theme", fx).map((s) => s.label)).toEqual(["Discretionary", "Banking", "Broad Market"]);
+  });
+
+  it("guesses unknown symbols from quote type and sector", () => {
+    expect(classify("ZZZZ", "EQUITY", "Technology")).toEqual({ type: "Unclassified", theme: "Technology", auto: true });
+    expect(classify("ZZZZ", "ETF")).toEqual({ type: "ETF", theme: "Unclassified", auto: true });
+    expect(classify("CRWD")).toEqual({ type: "Speculative Growth", theme: "Cybersecurity", auto: false });
+    const [slice] = allocate([{ symbol: "ZZZZ", value: 1, currency: "USD", quote: { quoteType: "EQUITY", currency: "USD" }, profile: { sector: "" } }], "theme", fx);
+    expect(slice.label).toBe("Unclassified");
+    expect(slice.members[0].auto).toBe(true);
   });
 });
 

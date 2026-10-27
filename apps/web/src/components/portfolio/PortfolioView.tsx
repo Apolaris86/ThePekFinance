@@ -35,7 +35,7 @@ import { formatNumber, formatPercent, formatPrice, formatSignedPrice } from "@/l
 import { useLiveSymbols } from "@/lib/live";
 import { useHistories, usePeriodChanges } from "@/lib/period";
 import { api, marketPoll } from "@/lib/queries";
-import { Donut } from "./Donut";
+import { AllocationBars } from "./AllocationBars";
 
 const SELECTED_KEY = "pek.portfolio";
 const SORT_KEY = "pek.holdingsSort";
@@ -640,10 +640,12 @@ function Allocation({ valuations, quotes, base, fx }: { valuations: HoldingValua
       loading: results.some((r) => r.isPending),
     }),
   });
-  const needsProfiles = view === "sector" || view === "country";
+  // Sector also drives the fallback theme for holdings not in the classification list.
+  const needsProfiles = view === "sector" || view === "country" || view === "theme";
   const slices = allocate(
     valuations.map((v) => ({
       symbol: v.holding.symbol,
+      name: quotes[v.holding.symbol]?.name,
       value: convert(v.marketValue, v.holding.currency, base, fx),
       currency: v.holding.currency,
       quote: quotes[v.holding.symbol],
@@ -677,7 +679,7 @@ function Allocation({ valuations, quotes, base, fx }: { valuations: HoldingValua
       {needsProfiles && profiles.loading ? (
         <div className="h-40 animate-pulse rounded-xl bg-surface" />
       ) : (
-        <Donut slices={slices} format={(v) => formatPrice(v, base)} />
+        <AllocationBars slices={slices} format={(v) => formatPrice(v, base)} />
       )}
     </section>
   );
