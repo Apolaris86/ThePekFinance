@@ -7,3 +7,4 @@ export * from "./db";
 export * from "./hours";
 export * from "./alerts";
 export * from "./format";
+export * from "./allocation";

@@ -1,18 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import {
+  allocate,
+  ALLOCATION_VIEWS,
   BASE_CURRENCIES,
   convert,
   exchangeOf,
   GAIN_PERIODS,
   groupLots,
   portfolioSeries,
+  seriesReturn,
   sumPeriodChanges,
   summarize,
   valueHolding,
+  type AllocationView,
   type BaseCurrency,
   type ChartRange,
   type FxRates,
@@ -33,8 +37,25 @@ import { useHistories, usePeriodChanges } from "@/lib/period";
 import { api, marketPoll } from "@/lib/queries";
 import { Donut } from "./Donut";
 
-const EXCHANGE_NAME = { US: "United States", SGX: "Singapore", EPA: "Paris" } as const;
 const SELECTED_KEY = "pek.portfolio";
+const SORT_KEY = "pek.holdingsSort";
+const ALLOCATION_KEY = "pek.allocationView";
+
+/** Per-browser view preferences; storage can be missing (private mode), so every access is guarded. */
+function readPref<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  try {
+    const v = typeof window === "undefined" ? null : localStorage.getItem(key);
+    return v && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writePref(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
+}
 
 export function PortfolioView() {
   const portfolios = usePortfolios();
@@ -128,7 +149,7 @@ export function PortfolioView() {
       ) : (
         <div className="h-28 animate-pulse rounded-xl bg-surface" />
       )}
-      {fx.data && <ValueChart lots={lots} base={baseCcy} fx={fx.data} />}
+      {fx.data && <ValueChart lots={lots} base={baseCcy} fx={fx.data} quotes={quotes} />}
       <AiCard
         title="Today's digest"
         cta={`Write today's ${portfolio?.name ?? "portfolio"} digest`}
@@ -137,7 +158,7 @@ export function PortfolioView() {
         fetcher={() => api.portfolioDigest(portfolio?.id)}
       />
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <HoldingsTable valuations={valuations} quotes={quotes} period={period} periodChanges={periodChanges.changes} />
+        <HoldingsTable valuations={valuations} quotes={quotes} period={period} periodChanges={periodChanges.changes} base={baseCcy} fx={fx.data} />
         {ready && <Allocation valuations={valuations} quotes={quotes} base={baseCcy} fx={fx.data!} />}
       </div>
     </div>
@@ -240,20 +261,50 @@ function Summary({
 
 const VALUE_RANGES: ChartRange[] = ["1M", "6M", "YTD", "1Y", "2Y", "5Y"];
 
-function ValueChart({ lots, base, fx }: { lots: Holding[]; base: BaseCurrency; fx: FxRates }) {
+function ValueChart({ lots, base, fx, quotes }: { lots: Holding[]; base: BaseCurrency; fx: FxRates; quotes: Record<string, Quote> }) {
   const [range, setRange] = useState<ChartRange>("6M");
-  const histories = useHistories(
-    lots.map((l) => l.symbol),
-    range,
-  );
-  const series = histories.data ? portfolioSeries(lots, histories.data, base, fx) : [];
+  // "" = whole portfolio; otherwise one holding's symbol
+  const [only, setOnly] = useState("");
+  const symbols = [...new Set(lots.map((l) => l.symbol))].sort();
+  const shown = only && symbols.includes(only) ? lots.filter((l) => l.symbol === only) : lots;
+  // Fetch history for every holding so switching the picker is instant.
+  const histories = useHistories(symbols, range);
+  const series = histories.data ? portfolioSeries(shown, histories.data, base, fx) : [];
+  const ret = seriesReturn(series, shown, base, fx);
   const candles = series.map((p) => ({ time: p.time, open: p.value, high: p.value, low: p.value, close: p.value }));
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   return (
     <section>
-      <div className="flex items-center justify-between border-b border-border">
-        <h2 className="text-lg font-medium">Value over time</h2>
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-b border-border">
+        <div className="pb-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-lg font-medium">Value over time</h2>
+            <label className="sr-only" htmlFor="value-chart-holding">Show</label>
+            <select
+              id="value-chart-holding"
+              value={only}
+              onChange={(e) => setOnly(e.target.value)}
+              className="rounded-lg border border-border bg-surface px-2 py-1 text-sm"
+            >
+              <option value="">All holdings</option>
+              {symbols.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                  {quotes[s]?.name ? ` · ${quotes[s].name}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          {ret ? (
+            <p className={`tabular mt-1 text-sm font-medium ${ret.change >= 0 ? "text-up" : "text-down"}`}>
+              {formatSignedPrice(ret.change, base)} ({formatPercent(ret.percent)}) over {range}
+              {ret.added > 0 && <span className="font-normal text-muted"> · not counting {formatPrice(ret.added, base)} added</span>}
+            </p>
+          ) : (
+            <p className="mt-1 h-5" />
+          )}
+        </div>
         <div role="tablist" aria-label="Value chart range" className="-mb-px flex">
           {VALUE_RANGES.map((r) => (
             <button
@@ -277,8 +328,23 @@ function ValueChart({ lots, base, fx }: { lots: Holding[]; base: BaseCurrency; f
           <PriceChart candles={candles} range={range} currency={base} timezone={timezone} />
         )}
       </div>
-      <p className="mt-2 text-xs text-muted">Each lot counts from its buy date. Past values use today&apos;s exchange rates.</p>
+      <p className="mt-2 text-xs text-muted">
+        Growth is the change in value minus money added during the period, as a share of what was invested. Each lot counts from its buy date; past values use
+        today&apos;s exchange rates.
+      </p>
     </section>
+  );
+}
+
+type SortKey = "symbol" | "shares" | "avgCost" | "price" | "value" | "period" | "gain";
+type SortDir = "asc" | "desc";
+const SORT_KEYS: SortKey[] = ["symbol", "shares", "avgCost", "price", "value", "period", "gain"];
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+      <path d="M11.3 2.7a1.5 1.5 0 0 1 2.1 2.1L5.8 12.4 3 13l.6-2.8 7.7-7.5Z" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -287,35 +353,98 @@ function HoldingsTable({
   quotes,
   period,
   periodChanges,
+  base,
+  fx,
 }: {
   valuations: HoldingValuation[];
   quotes: Record<string, Quote>;
   period: GainPeriod;
   periodChanges: Record<string, PeriodChange>;
+  base: BaseCurrency;
+  /** used to compare holdings in different currencies; native amounts until rates load */
+  fx?: FxRates;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [editing, setEditing] = useState<Holding | undefined>();
+  const [editingLot, setEditingLot] = useState<Holding | undefined>();
+  const [editingPosition, setEditingPosition] = useState<Position | undefined>();
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>(() => {
+    const [key, dir] = readPref(SORT_KEY, SORT_KEYS.flatMap((k) => [`${k}:asc`, `${k}:desc`]), "value:desc").split(":");
+    return { key: key as SortKey, dir: dir as SortDir };
+  });
   const { remove } = useHoldingMutations();
   const tone = (v: number) => (v >= 0 ? "text-up" : "text-down");
+
+  // Amounts are compared in the base currency so USD, SGD, EUR and AUD holdings rank fairly.
+  const inBase = (amount: number, v: HoldingValuation) => (fx ? convert(amount, v.holding.currency, base, fx) : amount);
+  const sortValue = (v: HoldingValuation): number | string => {
+    switch (sort.key) {
+      case "symbol":
+        return v.holding.symbol;
+      case "shares":
+        return v.holding.shares;
+      case "avgCost":
+        return inBase(v.holding.buyPrice, v);
+      case "price":
+        return inBase(v.price, v);
+      case "value":
+        return inBase(v.marketValue, v);
+      case "period": {
+        const pc = periodChanges[v.holding.symbol];
+        return pc ? inBase(pc.change, v) : Number.NEGATIVE_INFINITY;
+      }
+      case "gain":
+        return inBase(v.gain, v);
+    }
+  };
+  const sorted = [...valuations].sort((a, b) => {
+    const x = sortValue(a);
+    const y = sortValue(b);
+    const cmp = typeof x === "string" ? x.localeCompare(y as string) : x - (y as number);
+    return sort.dir === "asc" ? cmp : -cmp;
+  });
+
+  function sortBy(key: SortKey) {
+    // Text sorts A→Z first; numbers biggest first.
+    const dir: SortDir = sort.key === key ? (sort.dir === "asc" ? "desc" : "asc") : key === "symbol" ? "asc" : "desc";
+    setSort({ key, dir });
+    writePref(SORT_KEY, `${key}:${dir}`);
+  }
+
+  const header = (key: SortKey, label: string, align: "left" | "right" = "right", pad = "px-3") => {
+    const active = sort.key === key;
+    return (
+      <th aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"} className={`${pad} py-1.5 font-medium text-${align}`}>
+        <button
+          onClick={() => sortBy(key)}
+          className={`inline-flex items-center gap-1 rounded px-1 py-1 hover:text-foreground ${active ? "text-foreground" : ""}`}
+        >
+          {label}
+          <span aria-hidden className={`text-[10px] ${active ? "" : "opacity-30"}`}>
+            {active ? (sort.dir === "asc" ? "▲" : "▼") : "▼"}
+          </span>
+        </button>
+      </th>
+    );
+  };
 
   return (
     <section className="min-w-0">
       <h2 className="mb-3 text-lg font-medium">Holdings</h2>
       <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="w-full min-w-[42rem] text-sm">
+        <table className="w-full min-w-[44rem] text-sm">
           <thead className="text-left text-xs text-muted">
             <tr className="border-b border-border">
-              <th className="px-4 py-2.5 font-medium">Symbol</th>
-              <th className="px-3 py-2.5 text-right font-medium">Shares</th>
-              <th className="px-3 py-2.5 text-right font-medium">Avg cost</th>
-              <th className="px-3 py-2.5 text-right font-medium">Price</th>
-              <th className="px-3 py-2.5 text-right font-medium">Value</th>
-              <th className="px-3 py-2.5 text-right font-medium">{period} change</th>
-              <th className="px-4 py-2.5 text-right font-medium">Total gain</th>
+              {header("symbol", "Symbol", "left", "px-3")}
+              {header("shares", "Shares")}
+              {header("avgCost", "Avg cost")}
+              {header("price", "Price")}
+              {header("value", "Value")}
+              {header("period", `${period} change`)}
+              {header("gain", "Total gain", "right", "pl-3 pr-4")}
             </tr>
           </thead>
           <tbody>
-            {valuations.map((v) => {
+            {sorted.map((v) => {
               const p = v.holding as Position;
               const q = quotes[p.symbol];
               const pc = periodChanges[p.symbol];
@@ -325,9 +454,26 @@ function HoldingsTable({
                 <Fragment key={p.symbol}>
                   <tr onClick={() => setExpanded(open ? null : p.symbol)} className="cursor-pointer border-b border-border last:border-0 hover:bg-surface">
                     <td className="px-4 py-3">
-                      <Link href={`/quote/${encodeURIComponent(p.symbol)}`} onClick={(e) => e.stopPropagation()} className="font-mono text-xs font-semibold text-accent hover:underline">
-                        {p.symbol}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/quote/${encodeURIComponent(p.symbol)}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono text-xs font-semibold text-accent hover:underline"
+                        >
+                          {p.symbol}
+                        </Link>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingPosition(p);
+                          }}
+                          aria-label={`Edit shares and average cost for ${p.symbol}`}
+                          title="Edit shares and average cost"
+                          className="rounded p-1 text-muted hover:bg-background hover:text-accent"
+                        >
+                          <PencilIcon />
+                        </button>
+                      </div>
                       <p className="max-w-40 truncate text-xs text-muted">{q?.name}</p>
                     </td>
                     <td className="tabular px-3 py-3 text-right">{formatNumber(p.shares, p.shares % 1 ? 4 : 0)}</td>
@@ -352,7 +498,7 @@ function HoldingsTable({
                         <td className="px-4 py-2 pl-6">
                           Bought {lot.buyDate}
                           <span className="mt-1 flex gap-3">
-                            <button onClick={() => setEditing(lot)} className="text-accent hover:underline">Edit</button>
+                            <button onClick={() => setEditingLot(lot)} className="text-accent hover:underline">Edit</button>
                             <button
                               onClick={() => confirm(`Delete this lot of ${lot.shares} ${lot.symbol}?`) && remove.mutate(lot.id)}
                               className="hover:text-down"
@@ -372,44 +518,167 @@ function HoldingsTable({
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-muted">Click a row to see, edit or delete individual purchases. Values are in each stock&apos;s own currency.</p>
-      <HoldingForm open={!!editing} editing={editing} onClose={() => setEditing(undefined)} />
+      <p className="mt-2 text-xs text-muted">
+        Click a column to sort. The pencil edits shares and average cost; click a row to see individual purchases. Values are in each stock&apos;s own currency.
+      </p>
+      <HoldingForm open={!!editingLot} editing={editingLot} onClose={() => setEditingLot(undefined)} />
+      <PositionEditor position={editingPosition} onClose={() => setEditingPosition(undefined)} />
     </section>
   );
 }
 
+/**
+ * Edit a holding's total shares and average cost. A holding made of several
+ * purchases is combined into one purchase (dated at the earliest buy) so the
+ * totals stay exactly what was entered.
+ */
+function PositionEditor({ position, onClose }: { position?: Position; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const { update, remove } = useHoldingMutations();
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const d = ref.current;
+    if (!d) return;
+    if (position && !d.open) {
+      setError(null);
+      d.showModal();
+    } else if (!position && d.open) d.close();
+  }, [position]);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!position) return;
+    const f = new FormData(e.currentTarget);
+    const shares = Number(f.get("shares"));
+    const buyPrice = Number(f.get("buyPrice"));
+    if (!(shares > 0)) return setError("Shares must be more than 0");
+    if (!(buyPrice >= 0)) return setError("Enter the average price paid per share");
+
+    setBusy(true);
+    setError(null);
+    try {
+      const [first, ...rest] = [...position.lots].sort((a, b) => a.buyDate.localeCompare(b.buyDate));
+      await update.mutateAsync({
+        id: first.id,
+        holding: { portfolioId: first.portfolioId, symbol: first.symbol, shares, buyPrice, buyDate: first.buyDate, currency: first.currency },
+      });
+      for (const lot of rest) await remove.mutateAsync(lot.id);
+      onClose();
+    } catch {
+      setError("Couldn't save. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const input =
+    "mt-1 h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-accent focus:bg-background";
+  return (
+    <dialog
+      ref={ref}
+      onClose={onClose}
+      onClick={(e) => e.target === ref.current && onClose()}
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-border bg-background p-0 text-foreground backdrop:bg-black/50"
+    >
+      {position && (
+        <form onSubmit={onSubmit} className="space-y-4 p-6">
+          <h2 className="text-lg font-medium">Edit {position.symbol}</h2>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-sm">
+              Shares
+              <input name="shares" type="number" step="any" min="0" required defaultValue={position.shares} className={`${input} tabular`} />
+            </label>
+            <label className="block text-sm">
+              Avg cost ({position.currency})
+              <input
+                name="buyPrice"
+                type="number"
+                step="any"
+                min="0"
+                required
+                defaultValue={Number(position.buyPrice.toFixed(4))}
+                className={`${input} tabular`}
+              />
+            </label>
+          </div>
+          {position.lots.length > 1 && (
+            <p className="rounded-lg bg-surface px-3 py-2 text-xs text-muted">
+              This holding is made of {position.lots.length} purchases. Saving combines them into one purchase dated {position.buyDate} with these totals.
+            </p>
+          )}
+          {error && <p role="alert" className="text-sm text-down">{error}</p>}
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="rounded-full px-4 py-2 text-sm text-muted hover:bg-surface">
+              Cancel
+            </button>
+            <button disabled={busy} className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-background hover:opacity-90 disabled:opacity-60">
+              {busy ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </form>
+      )}
+    </dialog>
+  );
+}
+
 function Allocation({ valuations, quotes, base, fx }: { valuations: HoldingValuation[]; quotes: Record<string, Quote>; base: BaseCurrency; fx: FxRates }) {
-  const [by, setBy] = useState<"stock" | "exchange">("stock");
-  const inBase = (v: HoldingValuation) => convert(v.marketValue, v.holding.currency, base, fx);
-  const slices =
-    by === "stock"
-      ? valuations.map((v) => ({ label: v.holding.symbol, value: inBase(v) }))
-      : Object.entries(
-          valuations.reduce<Record<string, number>>((acc, v) => {
-            const ex = EXCHANGE_NAME[quotes[v.holding.symbol]?.exchange ?? "US"];
-            acc[ex] = (acc[ex] ?? 0) + inBase(v);
-            return acc;
-          }, {}),
-        ).map(([label, value]) => ({ label, value }));
+  const [view, setView] = useState<AllocationView>(() =>
+    readPref(
+      ALLOCATION_KEY,
+      ALLOCATION_VIEWS.map((v) => v.id),
+      "holding",
+    ),
+  );
+  const symbols = valuations.map((v) => v.holding.symbol);
+  // Sector and country come from company profiles (cached for the session).
+  const profiles = useQueries({
+    queries: symbols.map((s) => ({ queryKey: ["profile", s], queryFn: () => api.profile(s), staleTime: Infinity })),
+    combine: (results) => ({
+      bySymbol: Object.fromEntries(results.map((r, i) => [symbols[i], r.data])),
+      loading: results.some((r) => r.isPending),
+    }),
+  });
+  const needsProfiles = view === "sector" || view === "country";
+  const slices = allocate(
+    valuations.map((v) => ({
+      symbol: v.holding.symbol,
+      value: convert(v.marketValue, v.holding.currency, base, fx),
+      currency: v.holding.currency,
+      quote: quotes[v.holding.symbol],
+      profile: profiles.bySymbol[v.holding.symbol],
+    })),
+    view,
+    fx,
+  );
+
+  function choose(v: AllocationView) {
+    setView(v);
+    writePref(ALLOCATION_KEY, v);
+  }
 
   return (
     <section>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-lg font-medium">Allocation</h2>
-        <div className="flex rounded-full border border-border p-0.5 text-xs">
-          {(["stock", "exchange"] as const).map((k) => (
-            <button
-              key={k}
-              onClick={() => setBy(k)}
-              aria-pressed={by === k}
-              className={`rounded-full px-3 py-1 ${by === k ? "bg-accent/10 font-medium text-accent" : "text-muted"}`}
-            >
-              By {k}
-            </button>
-          ))}
-        </div>
+      <h2 className="mb-3 text-lg font-medium">Allocation</h2>
+      <div role="radiogroup" aria-label="Group allocation by" className="mb-4 flex flex-wrap gap-1.5 text-xs">
+        {ALLOCATION_VIEWS.map((v) => (
+          <button
+            key={v.id}
+            role="radio"
+            aria-checked={view === v.id}
+            onClick={() => choose(v.id)}
+            className={`rounded-full border px-3 py-1 ${view === v.id ? "border-accent bg-accent/10 font-medium text-accent" : "border-border text-muted hover:text-foreground"}`}
+          >
+            {v.label}
+          </button>
+        ))}
       </div>
-      <Donut slices={slices} format={(v) => formatPrice(v, base)} />
+      {needsProfiles && profiles.loading ? (
+        <div className="h-40 animate-pulse rounded-xl bg-surface" />
+      ) : (
+        <Donut slices={slices} format={(v) => formatPrice(v, base)} />
+      )}
     </section>
   );
 }

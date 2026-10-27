@@ -202,3 +202,33 @@ export function sumPeriodChanges(items: { currency: Currency; change: PeriodChan
   }
   return withPercent(change, startValue);
 }
+
+// --- Return over a value-chart range -----------------------------------------
+
+export interface SeriesReturn {
+  startValue: number;
+  endValue: number;
+  /** cost of lots bought after the range started (money added, not growth) */
+  added: number;
+  change: number;
+  percent: number;
+}
+
+/**
+ * Growth over a portfolioSeries range, excluding money added during it:
+ * (end - start - added) / (start + added). Lots bought after the first point
+ * count as added at their cost.
+ */
+export function seriesReturn(series: SeriesPoint[], lots: Holding[], base: Currency, fx: FxRates): SeriesReturn | null {
+  if (series.length < 2) return null;
+  const first = series[0];
+  const startDay = new Date(first.time * 1000).toISOString().slice(0, 10);
+  const added = lots
+    .filter((l) => l.buyDate > startDay)
+    .reduce((sum, l) => sum + convert(l.shares * l.buyPrice, l.currency, base, fx), 0);
+  const startValue = first.value;
+  const endValue = series[series.length - 1].value;
+  const change = endValue - startValue - added;
+  const invested = startValue + added;
+  return { startValue, endValue, added, change, percent: invested === 0 ? 0 : (change / invested) * 100 };
+}

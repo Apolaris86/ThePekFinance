@@ -126,6 +126,7 @@ interface YQuote {
   marketState?: string;
   exchangeDataDelayedBy?: number;
   regularMarketTime?: Date | number | string;
+  quoteType?: string;
 }
 
 function toQuote(q: YQuote): Quote {
@@ -152,6 +153,7 @@ function toQuote(q: YQuote): Quote {
     marketState: marketState(q.marketState),
     delayed: (q.exchangeDataDelayedBy ?? 0) > 0,
     timestamp: q.regularMarketTime ? new Date(q.regularMarketTime).getTime() : Date.now(),
+    quoteType: q.quoteType,
   };
 }
 

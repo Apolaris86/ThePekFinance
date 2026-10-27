@@ -29,6 +29,8 @@ export interface Quote {
   /** true when the price is delayed (e.g. SGX / Paris via Yahoo) */
   delayed: boolean;
   timestamp: number;
+  /** Yahoo instrument type: EQUITY, ETF, MUTUALFUND, INDEX, ... */
+  quoteType?: string;
 }
 
 export type MarketState = "PRE" | "REGULAR" | "POST" | "CLOSED";
