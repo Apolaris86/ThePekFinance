@@ -6,10 +6,22 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.*.*"],
   cacheComponents: true,
   partialPrefetching: true,
-  // Dev only: lets the Expo web preview (localhost:8081) call this API. Native
-  // apps don't use CORS, so production needs no cross-origin access.
+  // Dev: lets the Expo web preview (localhost:8081) call this API. Native apps don't use CORS.
+  // Production: lets MyEverythingApp (GitHub Pages) read the public market-data routes with plain GETs.
+  // No Allow-Headers in production, so browsers there can't send a Bearer token cross-origin and the
+  // signed-in routes (/api/ai/*, /api/live-token) stay same-origin only.
   async headers() {
-    if (process.env.NODE_ENV === "production") return [];
+    if (process.env.NODE_ENV === "production") {
+      return [
+        {
+          source: "/api/:path*",
+          headers: [
+            { key: "Access-Control-Allow-Origin", value: "https://apolaris86.github.io" },
+            { key: "Access-Control-Allow-Methods", value: "GET, OPTIONS" },
+          ],
+        },
+      ];
+    }
     return [
       {
         source: "/api/:path*",
